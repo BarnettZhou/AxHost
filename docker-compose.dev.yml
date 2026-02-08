@@ -1,4 +1,11 @@
-version: '3.8'
+# 开发环境配置
+# 特点：热重载、代码挂载、调试友好
+#
+# 使用方法：
+#   docker compose -f docker-compose.dev.yml up --build -d
+#
+# 查看日志：
+#   docker compose -f docker-compose.dev.yml logs -f web
 
 services:
   db:
@@ -23,19 +30,24 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # 挂载到 /app/app 以匹配 Dockerfile 中的路径
+      # 开发模式：挂载本地代码，修改后自动热重载
       - ./app:/app/app
-      - ./uploads:/app/app/uploads
+      # uploads 目录挂载到正确的路径
+      - ./uploads:/app/uploads
     environment:
       - DATABASE_URL=postgresql://axhost:axhost_password@db:5432/axhost
-      - SECRET_KEY=your-secret-key-change-this-in-production
+      - SECRET_KEY=dev-secret-key-change-in-production
       - ACCESS_TOKEN_EXPIRE_DAYS=30
+      - UPLOAD_DIR=/app/uploads
+      # 开发模式标志
+      - DEBUG=true
     depends_on:
       db:
         condition: service_healthy
-    # 设置工作目录并启动，使 Python 能找到 app 模块
     working_dir: /app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # --reload: 代码修改后自动重启服务
+    # --reload-dir: 指定监视的目录
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/app
 
 volumes:
   postgres_data:

@@ -11,19 +11,53 @@ Axure 原型文件托管系统 - 现代化重构版
 
 ## 快速开始
 
-### 1. 启动服务
+### 开发环境（推荐日常开发使用）
 
 ```bash
 cd ~/codes/axhost
-docker-compose up -d
+docker compose -f docker-compose.dev.yml up --build -d
 ```
 
-### 2. 访问系统
+开发环境特性：
+- ✅ **代码热重载**：修改 Python 代码后自动重启
+- ✅ **本地挂载**：直接编辑本地代码，容器内实时同步
+- ✅ **调试友好**：单 worker 模式，错误信息详细
+
+### 生产环境
+
+```bash
+cd ~/codes/axhost
+
+# 1. 配置环境变量（必须修改默认值！）
+export SECRET_KEY="your-secure-secret-key-here"
+export POSTGRES_PASSWORD="your-secure-db-password"
+
+# 2. 启动服务
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+生产环境特性：
+- 🔒 **安全可靠**：不暴露源码，使用环境变量配置
+- ⚡ **高性能**：多 worker 模式，支持并发请求
+- 🔄 **自动重启**：服务异常自动恢复
+- 💾 **资源限制**：防止资源耗尽
+
+### 访问系统
 
 - 前台: http://localhost:8000
 - 默认管理员: admin / admin123
 
-### 3. 数据迁移（从旧系统）
+### 停止服务
+
+```bash
+# 开发环境
+docker compose -f docker-compose.dev.yml down
+
+# 生产环境
+docker compose -f docker-compose.prod.yml down
+```
+
+### 数据迁移（从旧系统）
 
 ```bash
 # 修改脚本中的数据库连接信息
@@ -65,7 +99,8 @@ axhost/
 ├── scripts/
 │   ├── init.sql        # 数据库初始化
 │   └── migrate.py      # 数据迁移
-├── docker-compose.yml
+├── docker-compose.dev.yml   # 开发环境配置
+├── docker-compose.prod.yml  # 生产环境配置
 ├── Dockerfile
 └── README.md
 ```
@@ -76,4 +111,34 @@ axhost/
 
 ## 开发说明
 
-代码热更新已配置，修改后自动重启。
+### 常用命令
+
+```bash
+# 开发模式启动
+docker compose -f docker-compose.dev.yml up --build -d
+
+# 查看日志
+docker compose -f docker-compose.dev.yml logs -f web
+
+# 重启 web 服务
+docker compose -f docker-compose.dev.yml restart web
+
+# 进入容器调试
+docker compose -f docker-compose.dev.yml exec web bash
+
+# 数据库命令行
+docker compose -f docker-compose.dev.yml exec db psql -U axhost -d axhost
+```
+
+### 热重载说明
+
+开发环境已配置热重载，修改 `app/` 目录下的代码后会自动重启服务。但如果修改了以下文件，需要重新构建：
+
+- `requirements.txt`（新增依赖）
+- `Dockerfile`
+- `docker-compose.*.yml`
+
+重新构建命令：
+```bash
+docker compose -f docker-compose.dev.yml up --build -d
+```

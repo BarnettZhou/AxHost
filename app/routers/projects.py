@@ -5,14 +5,15 @@ from typing import Optional
 import os
 import shutil
 import zipfile
+import urllib.parse
 from app.core.database import get_db
 from app.routers.auth import get_current_user
 from app.models.models import User
 from app.schemas.schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, 
-    ProjectListResponse, ProjectVerifyRequest
+    ProjectListResponse, ProjectVerifyRequest, ChangeAuthorRequest
 )
-from app.services.services import ProjectService, generate_password
+from app.services.services import ProjectService, UserService, generate_password
 
 router = APIRouter(prefix="/api/projects", tags=["原型管理"])
 
@@ -30,6 +31,27 @@ def can_upload(user: User):
 def can_manage(project, user: User):
     """检查用户是否有管理权限"""
     return user.role == "admin" or project.author_id == user.id
+
+def is_admin(user: User):
+    """检查用户是否为管理员"""
+    return user.role == "admin"
+
+def decode_zip_filename(filename: str) -> str:
+    """
+    更稳健的 ZIP 文件名解码逻辑
+    """
+    try:
+        # 1. 尝试将 zipfile 默认的 cp437 编码还原为原始字节，再用 gbk 解码
+        # 这是处理 Windows 中文压缩包最有效的方法
+        return filename.encode('cp437').decode('gbk')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        try:
+            # 2. 如果失败，尝试 UTF-8 解码（处理本身就是 UTF-8 但被错误处理的情况）
+            return filename.encode('utf-8').decode('utf-8')
+        except:
+            # 3. 万不得已返回原样
+            return filename
+
 
 @router.get("", response_model=ProjectListResponse)
 def list_projects(
@@ -109,29 +131,96 @@ def upload_project(
     # 如果是 zip 文件，自动解压
     if file.filename and file.filename.lower().endswith('.zip'):
         try:
-            with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                # 检查是否有根目录
-                namelist = zip_ref.namelist()
-                if namelist:
-                    # 获取第一个文件/目录的顶级路径
-                    first_item = namelist[0]
-                    top_level = first_item.split('/')[0] if '/' in first_item else ''
-                    
-                    # 如果所有文件都在一个根目录下，解压到该目录，否则解压到项目根
-                    if top_level and all(name.startswith(top_level + '/') or name == top_level for name in namelist):
-                        extract_dir = project_dir
-                    else:
-                        extract_dir = project_dir
-                    
-                    zip_ref.extractall(extract_dir)
+            temp_extract_dir = os.path.join(project_dir, '_temp_extract')
+            os.makedirs(temp_extract_dir, exist_ok=True)
             
-            # 删除 zip 文件，节省空间
+            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                for info in zip_ref.infolist():
+                    # 关键修改：直接对 info.filename 进行解码
+                    # zipfile 的 info.filename 已经是被它用 cp437 解码后的字符串了
+                    decoded_name = decode_zip_filename(info.filename)
+                    
+                    # 过滤 macOS 自动生成的缓存文件夹
+                    if "__MACOSX" in decoded_name or ".DS_Store" in decoded_name:
+                        continue
+
+                    target_path = os.path.join(temp_extract_dir, decoded_name)
+                    
+                    # 安全检查
+                    if not os.path.realpath(target_path).startswith(os.path.realpath(temp_extract_dir)):
+                        continue
+                    
+                    if info.is_dir():
+                        os.makedirs(target_path, exist_ok=True)
+                    else:
+                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                        with zip_ref.open(info.filename) as source, open(target_path, 'wb') as target:
+                            shutil.copyfileobj(source, target)
+            
+            # 删除 zip 文件
             os.remove(file_path)
             
+            # 查找包含入口文件的目录
+            entry_dir = find_entry_directory(temp_extract_dir)
+            
+            if entry_dir is None:
+                # 没有找到入口文件，删除临时目录和项目
+                shutil.rmtree(temp_extract_dir)
+                if os.path.exists(project_dir):
+                    shutil.rmtree(project_dir)
+                ProjectService.delete(db, project)
+                raise HTTPException(status_code=400, detail="上传的压缩包中未找到入口文件")
+            
+            # 将入口目录下的所有文件复制到 project_dir
+            for item in os.listdir(entry_dir):
+                src = os.path.join(entry_dir, item)
+                dst = os.path.join(project_dir, item)
+                if os.path.exists(dst):
+                    if os.path.isdir(dst):
+                        shutil.rmtree(dst)
+                    else:
+                        os.remove(dst)
+                shutil.move(src, dst)
+            
+            # 删除临时目录
+            shutil.rmtree(temp_extract_dir)
+            
         except zipfile.BadZipFile:
-            pass  # 不是有效的 zip 文件，保留原文件
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            if os.path.exists(project_dir):
+                shutil.rmtree(project_dir)
+            ProjectService.delete(db, project)
+            raise HTTPException(status_code=400, detail="无效的压缩文件")
     
     return {"message": "上传成功", "object_id": project.object_id}
+
+
+def find_entry_directory(extract_dir: str) -> Optional[str]:
+    """
+    查找包含入口文件的目录
+    1. 检查 extract_dir 下是否同时存在 index.html 和 start.html 文件，若存在，返回 extract_dir
+    2. 若没有找到，则递归遍历其下所有目录，找到同时包含 index.html 和 start.html 的目录，返回该目录
+    3. 若第 2 步没有找到符合条件的目录，返回 None
+    """
+    def has_entry_files(directory: str) -> bool:
+        """检查目录是否同时包含 index.html 和 start.html"""
+        has_index = os.path.isfile(os.path.join(directory, 'index.html'))
+        has_start = os.path.isfile(os.path.join(directory, 'start.html'))
+        return has_index and has_start
+    
+    # 第 1 步：检查根目录
+    if has_entry_files(extract_dir):
+        return extract_dir
+    
+    # 第 2 步：递归遍历所有子目录
+    for root, dirs, files in os.walk(extract_dir):
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d != '__MACOSX']
+        if has_entry_files(root):
+            return root
+    
+    # 第 3 步：没有找到符合条件的目录
+    return None
 
 @router.get("/{object_id}", response_model=ProjectResponse)
 def get_project(
@@ -143,7 +232,6 @@ def get_project(
     if not project:
         raise HTTPException(status_code=404, detail="原型不存在")
     
-    # 检查访问权限
     if not ProjectService.can_access(db, project, current_user):
         raise HTTPException(status_code=403, detail="没有访问权限")
     
@@ -171,11 +259,9 @@ def verify_project_password(
     if not project:
         raise HTTPException(status_code=404, detail="原型不存在")
     
-    # 验证密码
     if not ProjectService.verify_password(project, verify_data.password):
         raise HTTPException(status_code=401, detail="密码错误")
     
-    # 授权访问
     ProjectService.grant_access(db, project.id, current_user.id)
     
     return {"message": "验证成功", "object_id": object_id}
@@ -194,7 +280,6 @@ def update_project(
     if not can_manage(project, current_user):
         raise HTTPException(status_code=403, detail="只有作者或管理员可以修改")
     
-    # 如果修改了密码，撤销所有访问权限
     if project_data.view_password is not None and project_data.view_password != project.view_password:
         ProjectService.revoke_access(db, project)
     
@@ -214,13 +299,131 @@ def delete_project(
     if not can_manage(project, current_user):
         raise HTTPException(status_code=403, detail="只有作者或管理员可以删除")
     
-    # 删除文件
     project_dir = os.path.join(UPLOAD_DIR, project.object_id)
     if os.path.exists(project_dir):
         shutil.rmtree(project_dir)
     
     ProjectService.delete(db, project)
     return {"message": "删除成功"}
+
+
+@router.post("/{object_id}/update-file")
+def update_project_file(
+    object_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """更新原型文件（覆盖原有文件）"""
+    project = ProjectService.get_by_object_id(db, object_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="原型不存在")
+    
+    if not can_manage(project, current_user):
+        raise HTTPException(status_code=403, detail="只有作者或管理员可以更新原型")
+    
+    project_dir = os.path.join(UPLOAD_DIR, project.object_id)
+    
+    # 清空原有目录内容
+    if os.path.exists(project_dir):
+        for item in os.listdir(project_dir):
+            item_path = os.path.join(project_dir, item)
+            if os.path.isdir(item_path):
+                shutil.rmtree(item_path)
+            else:
+                os.remove(item_path)
+    else:
+        os.makedirs(project_dir, exist_ok=True)
+    
+    # 保存新文件
+    file_path = os.path.join(project_dir, file.filename)
+    with open(file_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    
+    # 如果是 zip 文件，自动解压
+    if file.filename and file.filename.lower().endswith('.zip'):
+        try:
+            temp_extract_dir = os.path.join(project_dir, '_temp_extract')
+            os.makedirs(temp_extract_dir, exist_ok=True)
+            
+            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                for info in zip_ref.infolist():
+                    decoded_name = decode_zip_filename(info.filename)
+                    
+                    if "__MACOSX" in decoded_name or ".DS_Store" in decoded_name:
+                        continue
+
+                    target_path = os.path.join(temp_extract_dir, decoded_name)
+                    
+                    if not os.path.realpath(target_path).startswith(os.path.realpath(temp_extract_dir)):
+                        continue
+                    
+                    if info.is_dir():
+                        os.makedirs(target_path, exist_ok=True)
+                    else:
+                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                        with zip_ref.open(info.filename) as source, open(target_path, 'wb') as target:
+                            shutil.copyfileobj(source, target)
+            
+            # 删除 zip 文件
+            os.remove(file_path)
+            
+            # 查找包含入口文件的目录
+            entry_dir = find_entry_directory(temp_extract_dir)
+            
+            if entry_dir is None:
+                shutil.rmtree(temp_extract_dir)
+                raise HTTPException(status_code=400, detail="上传的压缩包中未找到入口文件")
+            
+            # 将入口目录下的所有文件复制到 project_dir
+            for item in os.listdir(entry_dir):
+                src = os.path.join(entry_dir, item)
+                dst = os.path.join(project_dir, item)
+                if os.path.exists(dst):
+                    if os.path.isdir(dst):
+                        shutil.rmtree(dst)
+                    else:
+                        os.remove(dst)
+                shutil.move(src, dst)
+            
+            # 删除临时目录
+            shutil.rmtree(temp_extract_dir)
+            
+        except zipfile.BadZipFile:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            raise HTTPException(status_code=400, detail="无效的压缩文件")
+    
+    # 更新项目更新时间
+    ProjectService.touch(db, project)
+    
+    return {"message": "更新成功"}
+
+
+@router.put("/{object_id}/change-author")
+def change_project_author(
+    object_id: str,
+    data: ChangeAuthorRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """更改原型作者（仅管理员）"""
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="只有管理员可以更改作者")
+    
+    project = ProjectService.get_by_object_id(db, object_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="原型不存在")
+    
+    # 检查新作者是否存在且状态正常
+    new_author = UserService.get_by_id(db, data.new_author_id)
+    if not new_author:
+        raise HTTPException(status_code=404, detail="新作者不存在")
+    if new_author.status != "active":
+        raise HTTPException(status_code=400, detail="新作者账户状态异常")
+    
+    ProjectService.change_author(db, project, data.new_author_id)
+    return {"message": "作者更改成功"}
 
 @router.post("/generate-password")
 def generate_random_password():
@@ -230,16 +433,13 @@ def generate_random_password():
 
 def find_start_file(project_dir: str) -> Optional[str]:
     """查找 Axure 原型的起始 HTML 文件"""
-    # 常见入口文件
     start_files = ['start.html', 'index.html', 'home.html', 'Start.html', 'Index.html']
     
-    # 先在根目录找
     for filename in start_files:
         filepath = os.path.join(project_dir, filename)
         if os.path.exists(filepath):
             return filepath
     
-    # 递归查找任何 HTML 文件
     for root, dirs, files in os.walk(project_dir):
         for filename in files:
             if filename.lower().endswith('.html'):
@@ -259,22 +459,18 @@ def view_project(
     if not project:
         raise HTTPException(status_code=404, detail="原型不存在")
     
-    # 检查访问权限
     if not ProjectService.can_access(db, project, current_user):
         raise HTTPException(status_code=403, detail="没有访问权限")
     
     project_dir = os.path.join(UPLOAD_DIR, project.object_id)
     
-    # 如果目录不存在或为空，返回提示
     if not os.path.exists(project_dir) or not os.listdir(project_dir):
         raise HTTPException(status_code=404, detail="原型文件尚未上传")
     
-    # 查找入口 HTML 文件
     start_file = find_start_file(project_dir)
     if not start_file:
         raise HTTPException(status_code=404, detail="未找到可预览的 HTML 文件")
     
-    # 直接返回文件（不注入 base 标签，让资源使用相对路径）
     return FileResponse(start_file)
 
 
@@ -290,14 +486,17 @@ def serve_project_file(
     if not project:
         raise HTTPException(status_code=404, detail="原型不存在")
     
-    # 检查访问权限
     if not ProjectService.can_access(db, project, current_user):
         raise HTTPException(status_code=403, detail="没有访问权限")
     
     project_dir = os.path.join(UPLOAD_DIR, project.object_id)
-    file_path = os.path.join(project_dir, filepath)
     
-    # 安全检查：确保文件在项目目录内
+    # URL解码 filepath，处理中文文件名
+    decoded_filepath = urllib.parse.unquote(filepath)
+    
+    file_path = os.path.join(project_dir, decoded_filepath)
+    
+    # 安全检查
     real_file_path = os.path.realpath(file_path)
     real_project_dir = os.path.realpath(project_dir)
     if not real_file_path.startswith(real_project_dir):

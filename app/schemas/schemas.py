@@ -70,3 +70,7 @@ class ProjectListResponse(BaseModel):
     total: int
     page: int
     per_page: int
+
+# 更改作者请求
+class ChangeAuthorRequest(BaseModel):
+    new_author_id: int

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
+from pydantic import BaseModel
 from app.core.database import get_db
 from app.routers.auth import get_current_user
 from app.models.models import User
@@ -13,10 +14,21 @@ from app.services.services import UserService, ProjectService
 
 router = APIRouter(prefix="/api/users", tags=["用户管理"])
 
+# 简化的用户响应（用于下拉选择）
+class UserOptionResponse(BaseModel):
+    id: int
+    name: str
+    employee_id: str
+    
+    class Config:
+        from_attributes = True
+
+
 def require_admin(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="需要管理员权限")
     return current_user
+
 
 @router.get("", response_model=List[UserResponse])
 def list_users(
@@ -26,6 +38,18 @@ def list_users(
     current_user: User = Depends(require_admin)
 ):
     return UserService.list(db, skip=skip, limit=limit)
+
+
+@router.get("/options", response_model=List[UserOptionResponse])
+def list_user_options(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """获取活跃用户列表（用于下拉选择）"""
+    from sqlalchemy import or_
+    users = db.query(User).filter(User.status == "active").all()
+    return users
+
 
 @router.post("", response_model=UserResponse)
 def create_user(
@@ -40,6 +64,7 @@ def create_user(
     
     return UserService.create(db, user_data)
 
+
 @router.put("/{user_id}", response_model=UserResponse)
 def update_user(
     user_id: int,
@@ -52,6 +77,7 @@ def update_user(
         raise HTTPException(status_code=404, detail="用户不存在")
     
     return UserService.update(db, user, user_data)
+
 
 @router.delete("/{user_id}")
 def delete_user(

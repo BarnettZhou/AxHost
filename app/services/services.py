@@ -180,3 +180,20 @@ class ProjectService:
         """密码修改后撤销所有访问权限"""
         db.query(ProjectAccess).filter(ProjectAccess.project_id == project.id).delete()
         db.commit()
+    
+    @staticmethod
+    def change_author(db: Session, project: Project, new_author_id: int):
+        """更改项目作者"""
+        project.author_id = new_author_id
+        db.commit()
+        db.refresh(project)
+        return project
+    
+    @staticmethod
+    def touch(db: Session, project: Project):
+        """更新项目更新时间"""
+        from datetime import datetime
+        project.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(project)
+        return project
