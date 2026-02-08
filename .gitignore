@@ -55,6 +55,9 @@ uploads/
 # Documentation
 docs/build/
 
+# electron-app
+electron-app/
+
 # Temporary files
 *.tmp
 *.temp
