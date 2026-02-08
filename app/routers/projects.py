@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse
+from app.routers.auth import get_current_user
+from app.models.models import User, Project, ProjectAccess
 from sqlalchemy.orm import Session
 from typing import Optional
 import os
@@ -7,8 +9,7 @@ import shutil
 import zipfile
 import urllib.parse
 from app.core.database import get_db
-from app.routers.auth import get_current_user
-from app.models.models import User
+
 from app.schemas.schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, 
     ProjectListResponse, ProjectVerifyRequest, ChangeAuthorRequest
@@ -53,16 +54,68 @@ def decode_zip_filename(filename: str) -> str:
             return filename
 
 
-@router.get("", response_model=ProjectListResponse)
+def format_to_cst(dt):
+    """将 UTC 时间转换为东八区时间字符串"""
+    if dt is None:
+        return None
+    from datetime import timedelta
+    cst_time = dt + timedelta(hours=8)
+    return cst_time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+@router.get("")
 def list_projects(
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
     search: str = Query(""),
+    author_id: Optional[int] = Query(None),
+    project_type: Optional[str] = Query(None, description="my:我的项目, collaborate:协作项目"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """
+    获取项目列表
+    - search: 搜索项目名称
+    - author_id: 筛选指定作者的项目
+    - project_type: my=我的项目(我是作者), collaborate=协作项目(他人创建)
+    """
     skip = (page - 1) * per_page
-    projects, total = ProjectService.list_accessible(db, current_user, skip, per_page, search)
+    
+    # 构建查询
+    from sqlalchemy import or_
+    query = db.query(Project)
+    
+    # 搜索项目名称
+    if search:
+        query = query.filter(Project.name.ilike(f"%{search}%"))
+    
+    # 项目类型筛选
+    if project_type == "my":
+        # 我的项目：我是作者
+        query = query.filter(Project.author_id == current_user.id)
+    elif project_type == "collaborate":
+        # 协作项目：他人创建但我有权限访问的
+        query = query.filter(Project.author_id != current_user.id)
+    
+    # 指定作者筛选（用于协作项目下筛选特定作者）
+    if author_id is not None:
+        query = query.filter(Project.author_id == author_id)
+    
+    # 权限过滤（管理员看所有，其他人只能看公开+自己的+被授权的）
+    if current_user.role != "admin":
+        access_project_ids = db.query(ProjectAccess.project_id).filter(ProjectAccess.user_id == current_user.id).all()
+        access_ids = [p[0] for p in access_project_ids]
+        query = query.filter(
+            or_(
+                Project.is_public == True,
+                Project.author_id == current_user.id,
+                Project.id.in_(access_ids) if access_ids else False
+            )
+        )
+    
+    # 排序和分页
+    total = query.count()
+    projects = query.order_by(Project.updated_at.desc()).offset(skip).limit(per_page).all()
     
     # 标记可访问状态
     result = []
@@ -75,9 +128,9 @@ def list_projects(
             "author_name": project.author.name if project.author else "未知",
             "view_password": project.view_password,
             "is_public": project.is_public,
-            "created_at": project.created_at,
-            "updated_at": project.updated_at,
-            "can_access": True  # 已经在查询中过滤了
+            "created_at": format_to_cst(project.created_at),
+            "updated_at": format_to_cst(project.updated_at),
+            "can_access": True
         }
         result.append(p_dict)
     
@@ -451,16 +504,21 @@ def find_start_file(project_dir: str) -> Optional[str]:
 @page_router.get("/{object_id}/")
 def view_project(
     object_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    request: Request,
+    db: Session = Depends(get_db)
 ):
-    """访问原型首页（返回 start.html）"""
+    """访问原型首页（返回 start.html）- 无需登录，公开原型可直接访问，密码保护原型需验证密码"""
     project = ProjectService.get_by_object_id(db, object_id)
     if not project:
         raise HTTPException(status_code=404, detail="原型不存在")
     
-    if not ProjectService.can_access(db, project, current_user):
-        raise HTTPException(status_code=403, detail="没有访问权限")
+    # 检查是否需要密码验证
+    if not project.is_public:
+        # 检查是否已通过密码验证（通过 cookie）
+        verified = request.cookies.get(f"project_access_{object_id}")
+        if verified != "1":
+            # 需要密码验证，返回密码输入页面
+            return HTMLResponse(content=get_password_verify_page(object_id, project.name))
     
     project_dir = os.path.join(UPLOAD_DIR, project.object_id)
     
@@ -478,16 +536,19 @@ def view_project(
 def serve_project_file(
     object_id: str,
     filepath: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    request: Request,
+    db: Session = Depends(get_db)
 ):
-    """访问原型的静态资源文件"""
+    """访问原型的静态资源文件 - 无需登录"""
     project = ProjectService.get_by_object_id(db, object_id)
     if not project:
         raise HTTPException(status_code=404, detail="原型不存在")
     
-    if not ProjectService.can_access(db, project, current_user):
-        raise HTTPException(status_code=403, detail="没有访问权限")
+    # 检查是否需要密码验证
+    if not project.is_public:
+        verified = request.cookies.get(f"project_access_{object_id}")
+        if verified != "1":
+            raise HTTPException(status_code=403, detail="需要密码验证")
     
     project_dir = os.path.join(UPLOAD_DIR, project.object_id)
     
@@ -506,3 +567,110 @@ def serve_project_file(
         raise HTTPException(status_code=404, detail="文件不存在")
     
     return FileResponse(file_path)
+
+
+def get_password_verify_page(object_id: str, project_name: str) -> str:
+    """获取密码验证页面的 HTML"""
+    return f'''<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>输入密码 - {project_name}</title>
+    <script src="/static/js/tailwindcss.js"></script>
+    <link href="/static/css/inter-font.css" rel="stylesheet">
+    <style>body {{ font-family: 'Inter', sans-serif; }}</style>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4">
+        <div class="text-center mb-6">
+            <div class="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+            </div>
+            <h1 class="text-xl font-bold text-gray-900">{project_name}</h1>
+            <p class="text-gray-500 mt-2 text-sm">此原型需要密码才能访问</p>
+        </div>
+        
+        <form id="verifyForm" class="space-y-4">
+            <div>
+                <input type="password" id="password" required
+                    class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all text-center text-lg tracking-widest"
+                    placeholder="请输入访问密码"
+                    autocomplete="off">
+            </div>
+            <button type="submit" id="submitBtn"
+                class="w-full py-3 px-4 bg-gradient-to-r from-orange-600 to-orange-500 text-white font-medium rounded-lg hover:from-orange-700 hover:to-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all">
+                验证密码
+            </button>
+        </form>
+        
+        <div id="message" class="mt-4 text-center text-sm hidden"></div>
+    </div>
+    
+    <script>
+        document.getElementById('verifyForm').addEventListener('submit', async (e) => {{
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const msg = document.getElementById('message');
+            
+            btn.disabled = true;
+            btn.textContent = '验证中...';
+            msg.className = 'mt-4 text-center text-sm hidden';
+            
+            try {{
+                const response = await fetch('/api/projects/{object_id}/verify-public', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ password: document.getElementById('password').value }})
+                }});
+                
+                if (response.ok) {{
+                    // 验证成功，刷新页面
+                    window.location.reload();
+                }} else {{
+                    const data = await response.json();
+                    msg.textContent = data.detail || '密码错误';
+                    msg.className = 'mt-4 text-center text-sm text-red-600';
+                    msg.classList.remove('hidden');
+                }}
+            }} catch (error) {{
+                msg.textContent = '网络错误，请重试';
+                msg.className = 'mt-4 text-center text-sm text-red-600';
+                msg.classList.remove('hidden');
+            }}
+            
+            btn.disabled = false;
+            btn.textContent = '验证密码';
+        }});
+    </script>
+</body>
+</html>'''
+
+
+@router.post("/{object_id}/verify-public")
+def verify_project_password_public(
+    object_id: str,
+    verify_data: ProjectVerifyRequest,
+    response: Response,
+    db: Session = Depends(get_db)
+):
+    """公开访问时的密码验证 - 无需登录，验证成功后设置 cookie"""
+    project = ProjectService.get_by_object_id(db, object_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="原型不存在")
+    
+    if not ProjectService.verify_password(project, verify_data.password):
+        raise HTTPException(status_code=401, detail="密码错误")
+    
+    # 设置 cookie，标记已验证（7天有效期）
+    response.set_cookie(
+        key=f"project_access_{object_id}",
+        value="1",
+        max_age=60 * 60 * 24 * 7,  # 7天
+        httponly=True,
+        samesite="lax"
+    )
+    
+    return {"message": "验证成功", "object_id": object_id}

@@ -11,6 +11,20 @@ from app.schemas.schemas import (
     ProjectListResponse, ProjectVerifyRequest
 )
 from app.services.services import UserService, ProjectService
+from app.core.security import get_password_hash
+from datetime import timedelta
+
+
+def format_to_cst(dt):
+    """将 UTC 时间转换为东八区时间字符串"""
+    if dt is None:
+        return None
+    cst_time = dt + timedelta(hours=8)
+    return cst_time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+class ChangePasswordRequest(BaseModel):
+    password: str
 
 router = APIRouter(prefix="/api/users", tags=["用户管理"])
 
@@ -30,14 +44,62 @@ def require_admin(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-@router.get("", response_model=List[UserResponse])
+@router.get("")
 def list_users(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    search: str = Query(""),
+    status: str = Query(""),
+    role: str = Query(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
-    return UserService.list(db, skip=skip, limit=limit)
+    """获取用户列表，支持搜索和筛选"""
+    from sqlalchemy import or_
+    
+    query = db.query(User)
+    
+    # 搜索姓名或工号
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            or_(
+                User.name.ilike(search_pattern),
+                User.employee_id.ilike(search_pattern)
+            )
+        )
+    
+    # 状态筛选
+    if status:
+        query = query.filter(User.status == status)
+    
+    # 角色筛选
+    if role:
+        query = query.filter(User.role == role)
+    
+    # 分页
+    total = query.count()
+    skip = (page - 1) * per_page
+    users = query.offset(skip).limit(per_page).all()
+    
+    # 格式化响应
+    result = []
+    for user in users:
+        result.append({
+            "id": user.id,
+            "name": user.name,
+            "employee_id": user.employee_id,
+            "role": user.role,
+            "status": user.status,
+            "created_at": format_to_cst(user.created_at) if hasattr(user, 'created_at') else ""
+        })
+    
+    return {
+        "items": result,
+        "total": total,
+        "page": page,
+        "per_page": per_page
+    }
 
 
 @router.get("/options", response_model=List[UserOptionResponse])
@@ -63,6 +125,27 @@ def create_user(
         raise HTTPException(status_code=400, detail="工号已存在")
     
     return UserService.create(db, user_data)
+
+
+@router.get("/{user_id}")
+def get_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """获取单个用户信息"""
+    user = UserService.get_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    return {
+        "id": user.id,
+        "name": user.name,
+        "employee_id": user.employee_id,
+        "role": user.role,
+        "status": user.status,
+        "created_at": format_to_cst(user.created_at) if hasattr(user, 'created_at') else None
+    }
 
 
 @router.put("/{user_id}", response_model=UserResponse)
@@ -91,3 +174,21 @@ def delete_user(
     
     UserService.delete(db, user)
     return {"message": "用户已删除"}
+
+
+@router.post("/change-password")
+def change_password(
+    data: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """当前用户修改自己的密码（无需验证原密码）"""
+    # 验证密码长度
+    if len(data.password) < 6 or len(data.password) > 18:
+        raise HTTPException(status_code=400, detail="密码长度需在6-18位之间")
+    
+    # 直接更新密码
+    current_user.password_hash = get_password_hash(data.password)
+    db.commit()
+    
+    return {"message": "密码修改成功"}

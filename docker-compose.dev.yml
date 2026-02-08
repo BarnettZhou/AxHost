@@ -39,6 +39,8 @@ services:
       - SECRET_KEY=dev-secret-key-change-in-production
       - ACCESS_TOKEN_EXPIRE_DAYS=30
       - UPLOAD_DIR=/app/uploads
+      # 时区设置（东八区）
+      - TZ=Asia/Shanghai
       # 开发模式标志
       - DEBUG=true
     depends_on:
