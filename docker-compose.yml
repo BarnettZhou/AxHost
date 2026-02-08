@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: axhost
+      POSTGRES_PASSWORD: axhost_password
+      POSTGRES_DB: axhost
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U axhost -d axhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # 挂载到 /app/app 以匹配 Dockerfile 中的路径
+      - ./app:/app/app
+      - ./uploads:/app/app/uploads
+    environment:
+      - DATABASE_URL=postgresql://axhost:axhost_password@db:5432/axhost
+      - SECRET_KEY=your-secret-key-change-this-in-production
+      - ACCESS_TOKEN_EXPIRE_DAYS=30
+    depends_on:
+      db:
+        condition: service_healthy
+    # 设置工作目录并启动，使 Python 能找到 app 模块
+    working_dir: /app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:

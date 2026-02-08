@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AxHost - 原型管理</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(0,0,0,0.1); }
+        .gradient-text { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 导航栏 -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="w-8 h-8 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                        </svg>
+                    </div>
+                    <span class="text-xl font-bold gradient-text">AxHost</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="userName" class="text-gray-600"></span>
+                    <a href="/admin" id="adminLink" class="hidden text-gray-600 hover:text-purple-600 transition-colors">管理后台</a>
+                    <button onclick="logout()" class="text-gray-600 hover:text-red-600 transition-colors">退出</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- 搜索和上传 -->
+        <div class="mb-8 flex flex-col sm:flex-row gap-4">
+            <div class="flex-1 relative">
+                <input type="text" id="searchInput" placeholder="搜索原型..."
+                    class="w-full px-4 py-3 pl-12 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                    onkeyup="if(event.key==='Enter')loadProjects()">
+                <svg class="w-5 h-5 text-gray-400 absolute left-4 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+            </div>
+            <button id="uploadBtn" onclick="showUploadModal()" class="hidden px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all">
+                + 上传原型
+            </button>
+        </div>
+
+        <!-- 项目列表 -->
+        <div id="projectList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- 动态加载 -->
+        </div>
+
+        <!-- 分页 -->
+        <div id="pagination" class="mt-8 flex justify-center space-x-2">
+            <!-- 动态加载 -->
+        </div>
+    </main>
+
+    <!-- 上传模态框 -->
+    <div id="uploadModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg mx-4">
+            <h3 class="text-xl font-bold mb-4">上传原型</h3>
+            <form id="uploadForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">项目名称</label>
+                    <input type="text" id="projectName" required class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">原型文件</label>
+                    <input type="file" id="projectFile" accept=".zip,.html" required class="w-full">
+                </div>
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="isPublic" class="w-4 h-4 text-purple-600 rounded">
+                        <span class="ml-2 text-sm text-gray-600">公开</span>
+                    </label>
+                </div>
+                <div id="passwordSection" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">查看密码</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="viewPassword" class="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500">
+                        <button type="button" onclick="generatePassword()" class="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-sm">随机生成</button>
+                    </div>
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button type="button" onclick="closeUploadModal()" class="flex-1 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">取消</button>
+                    <button type="submit" class="flex-1 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors">上传</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let currentPage = 1;
+
+        async function init() {
+            try {
+                const response = await fetch('/api/auth/me');
+                if (!response.ok) {
+                    window.location.href = '/login';
+                    return;
+                }
+                currentUser = await response.json();
+                document.getElementById('userName').textContent = currentUser.name;
+                
+                // 显示上传按钮（管理员和产品经理）
+                if (['admin', 'product_manager'].includes(currentUser.role)) {
+                    document.getElementById('uploadBtn').classList.remove('hidden');
+                }
+                
+                // 显示管理后台链接（管理员）
+                if (currentUser.role === 'admin') {
+                    document.getElementById('adminLink').classList.remove('hidden');
+                }
+                
+                loadProjects();
+            } catch (error) {
+                window.location.href = '/login';
+            }
+        }
+
+        async function loadProjects(page = 1) {
+            currentPage = page;
+            const search = document.getElementById('searchInput').value;
+            
+            try {
+                const response = await fetch(`/api/projects?page=${page}&per_page=12&search=${encodeURIComponent(search)}`);
+                const data = await response.json();
+                
+                const listEl = document.getElementById('projectList');
+                listEl.innerHTML = data.items.map(project => `
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 card-hover transition-all cursor-pointer" onclick="viewProject('${project.object_id}')">
+                        <div class="flex items-start justify-between mb-3">
+                            <h3 class="font-semibold text-gray-900 line-clamp-1">${project.name}</h3>
+                            ${project.is_public ? 
+                                '<span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">公开</span>' :
+                                '<span class="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">私密</span>'
+                            }
+                        </div>
+                        <p class="text-sm text-gray-500 mb-4">作者: ${project.author_name}</p>
+                        <div class="flex items-center justify-between text-xs text-gray-400">
+                            <span>${new Date(project.updated_at).toLocaleDateString()}</span>
+                            <span class="text-purple-600">查看详情 →</span>
+                        </div>
+                    </div>
+                `).join('');
+                
+                // 分页
+                const totalPages = Math.ceil(data.total / data.per_page);
+                const pageEl = document.getElementById('pagination');
+                let pageHtml = '';
+                for (let i = 1; i <= totalPages; i++) {
+                    pageHtml += `<button onclick="loadProjects(${i})" class="px-3 py-1 rounded ${i === page ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}">${i}</button>`;
+                }
+                pageEl.innerHTML = pageHtml;
+                
+            } catch (error) {
+                console.error('加载失败:', error);
+            }
+        }
+
+        function showUploadModal() {
+            document.getElementById('uploadModal').classList.remove('hidden');
+        }
+
+        function closeUploadModal() {
+            document.getElementById('uploadModal').classList.add('hidden');
+        }
+
+        async function generatePassword() {
+            try {
+                const response = await fetch('/api/projects/generate-password');
+                const data = await response.json();
+                document.getElementById('viewPassword').value = data.password;
+            } catch (error) {
+                console.error('生成密码失败:', error);
+            }
+        }
+
+        document.getElementById('isPublic').addEventListener('change', (e) => {
+            document.getElementById('passwordSection').classList.toggle('hidden', e.target.checked);
+        });
+
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('file', document.getElementById('projectFile').files[0]);
+            formData.append('name', document.getElementById('projectName').value);
+            formData.append('is_public', document.getElementById('isPublic').checked);
+            
+            if (!document.getElementById('isPublic').checked) {
+                formData.append('view_password', document.getElementById('viewPassword').value);
+            }
+            
+            try {
+                const response = await fetch('/api/projects/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    closeUploadModal();
+                    loadProjects();
+                    document.getElementById('uploadForm').reset();
+                } else {
+                    const data = await response.json();
+                    alert(data.detail || '上传失败');
+                }
+            } catch (error) {
+                alert('网络错误');
+            }
+        });
+
+        function viewProject(objectId) {
+            window.open(`/projects/${objectId}/`, '_blank');
+        }
+
+        async function logout() {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            window.location.href = '/login';
+        }
+
+        init();
+    </script>
+</body>
+</html>
