@@ -41,11 +41,13 @@ class ProjectBase(BaseModel):
 class ProjectCreate(ProjectBase):
     view_password: Optional[str] = None
     is_public: bool = False
+    remark: Optional[str] = None
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     view_password: Optional[str] = None
     is_public: Optional[bool] = None
+    remark: Optional[str] = None
 
 class ProjectResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -57,6 +59,7 @@ class ProjectResponse(BaseModel):
     author_name: str
     view_password: Optional[str]
     is_public: bool
+    remark: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     can_access: bool = False

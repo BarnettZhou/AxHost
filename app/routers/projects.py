@@ -128,6 +128,7 @@ def list_projects(
             "author_name": project.author.name if project.author else "未知",
             "view_password": project.view_password,
             "is_public": project.is_public,
+            "remark": project.remark,
             "created_at": format_to_cst(project.created_at),
             "updated_at": format_to_cst(project.updated_at),
             "can_access": True
@@ -159,6 +160,7 @@ def upload_project(
     name: str = Form(...),
     view_password: Optional[str] = Form(None),
     is_public: bool = Form(False),
+    remark: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -169,7 +171,8 @@ def upload_project(
     project_data = ProjectCreate(
         name=name,
         view_password=view_password,
-        is_public=is_public
+        is_public=is_public,
+        remark=remark
     )
     project = ProjectService.create(db, project_data, current_user.id)
     

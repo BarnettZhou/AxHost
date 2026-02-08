@@ -77,7 +77,8 @@ class ProjectService:
             name=project_data.name,
             author_id=author_id,
             view_password=project_data.view_password,
-            is_public=project_data.is_public
+            is_public=project_data.is_public,
+            remark=project_data.remark
         )
         db.add(db_project)
         db.commit()
@@ -92,6 +93,8 @@ class ProjectService:
             project.view_password = project_data.view_password
         if project_data.is_public is not None:
             project.is_public = project_data.is_public
+        if project_data.remark is not None:
+            project.remark = project_data.remark
         db.commit()
         db.refresh(project)
         return project

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.core.database import Base
@@ -28,6 +28,7 @@ class Project(Base):
     author_id = Column(Integer, ForeignKey("users.id"))
     view_password = Column(String(18))  # 明文存储
     is_public = Column(Boolean, default=False)
+    remark = Column(Text, nullable=True)  # 备注字段
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

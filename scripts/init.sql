@@ -19,9 +19,13 @@ CREATE TABLE IF NOT EXISTS projects (
     author_id INTEGER REFERENCES users(id),
     view_password VARCHAR(18),
     is_public BOOLEAN DEFAULT FALSE,
+    remark TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 如果表已存在，添加 remark 字段
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS remark TEXT;
 
 -- 创建访问记录表
 CREATE TABLE IF NOT EXISTS project_access (
