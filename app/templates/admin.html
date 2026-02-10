@@ -2,8 +2,29 @@
 
 {% block title %}管理后台 - AxHost{% endblock %}
 
-{% block logo %}
-<a href="/" class="text-xl font-bold gradient-text">AxHost 管理后台</a>
+{% block navbar %}
+    {% set logo_text = 'AxHost 管理后台' %}
+    {% set logo_href = '/admin' %}
+    {% include "components/navbar.html" %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* 自定义下拉菜单样式 - 覆盖 base.html 中的动画 */
+    .custom-dropdown .dropdown-trigger:hover {
+        border-color: #FF6600;
+    }
+    .custom-dropdown .dropdown-menu {
+        animation: dropdownIn 0.15s ease;
+        opacity: 1 !important;
+        visibility: visible !important;
+        transform: none !important;
+    }
+    @keyframes dropdownIn {
+        from { opacity: 0; transform: translateY(-8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
 {% endblock %}
 
 {% block nav_extra %}
@@ -16,9 +37,9 @@
 {% endblock %}
 
 {% block content %}
-<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<main class="main-card max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 my-4 sm:my-6">
     <!-- 筛选表单 -->
-    <div class="mb-6">
+    <div class="mb-4">
         <div class="flex items-center gap-3">
             <!-- 左侧：筛选条件组 -->
             <div class="flex flex-wrap items-center gap-3 flex-1">
@@ -32,20 +53,42 @@
                     </svg>
                 </div>
                 
-                <!-- 状态筛选 -->
-                <select id="statusFilter" onchange="loadUsers()" class="h-10 px-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm bg-white w-[120px]">
-                    <option value="">全部状态</option>
-                    <option value="active">正常</option>
-                    <option value="inactive">停用</option>
-                </select>
+                <!-- 状态筛选 - 自定义下拉菜单 -->
+                <div class="custom-dropdown relative w-[120px]" id="statusFilter_container">
+                    <button type="button" 
+                            class="dropdown-trigger w-full h-10 px-3 rounded-lg border border-gray-300 bg-white text-left text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all flex items-center justify-between"
+                            onclick="toggleDropdownMenu('statusFilter')">
+                        <span class="dropdown-text text-gray-700">全部状态</span>
+                        <svg class="dropdown-arrow w-4 h-4 text-gray-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+                    <input type="hidden" id="statusFilter" value="">
+                    <div class="dropdown-menu absolute z-50 w-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 hidden max-h-60 overflow-y-auto" id="statusFilter_menu">
+                        <div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors bg-orange-50 text-orange-700" data-value="" onclick="selectStatusOption('', '全部状态')">全部状态</div>
+                        <div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors" data-value="active" onclick="selectStatusOption('active', '正常')">正常</div>
+                        <div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors" data-value="inactive" onclick="selectStatusOption('inactive', '停用')">停用</div>
+                    </div>
+                </div>
                 
-                <!-- 角色筛选 -->
-                <select id="roleFilter" onchange="loadUsers()" class="h-10 px-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm bg-white w-[140px]">
-                    <option value="">全部角色</option>
-                    <option value="admin">管理员</option>
-                    <option value="product_manager">产品经理</option>
-                    <option value="developer">技术开发</option>
-                </select>
+                <!-- 角色筛选 - 自定义下拉菜单 -->
+                <div class="custom-dropdown relative w-[140px]" id="roleFilter_container">
+                    <button type="button" 
+                            class="dropdown-trigger w-full h-10 px-3 rounded-lg border border-gray-300 bg-white text-left text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all flex items-center justify-between"
+                            onclick="toggleDropdownMenu('roleFilter')">
+                        <span class="dropdown-text text-gray-700">全部角色</span>
+                        <svg class="dropdown-arrow w-4 h-4 text-gray-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+                    <input type="hidden" id="roleFilter" value="">
+                    <div class="dropdown-menu absolute z-50 w-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 hidden max-h-60 overflow-y-auto" id="roleFilter_menu">
+                        <div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors bg-orange-50 text-orange-700" data-value="" onclick="selectRoleOption('', '全部角色')">全部角色</div>
+                        <div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors" data-value="admin" onclick="selectRoleOption('admin', '管理员')">管理员</div>
+                        <div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors" data-value="product_manager" onclick="selectRoleOption('product_manager', '产品经理')">产品经理</div>
+                        <div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors" data-value="developer" onclick="selectRoleOption('developer', '技术开发')">技术开发</div>
+                    </div>
+                </div>
             </div>
             
             <!-- 右侧：搜索和重置按钮 -->
@@ -67,7 +110,7 @@
     </div>
 
     <!-- 第二行：添加用户 + 分页 -->
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-4">
         <!-- 左侧：添加用户 -->
         <button onclick="showAddModal()" class="h-10 px-4 bg-gradient-to-r from-orange-600 to-orange-500 text-white font-medium rounded-lg hover:from-orange-700 hover:to-orange-600 transition-all flex items-center gap-2 text-sm">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -121,20 +164,44 @@
                 <input type="password" id="userPassword" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500">
                 <p class="text-xs text-gray-500 mt-1">编辑时留空表示不修改密码</p>
             </div>
+            <!-- 角色 - 自定义下拉菜单 -->
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">角色</label>
-                <select id="userRole" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500">
-                    <option value="admin">管理员</option>
-                    <option value="product_manager">产品经理</option>
-                    <option value="developer">技术开发</option>
-                </select>
+                <div class="custom-dropdown relative" id="userRole_container">
+                    <button type="button" 
+                            class="dropdown-trigger w-full h-10 px-4 py-2 rounded-lg border border-gray-300 bg-white text-left text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all flex items-center justify-between"
+                            onclick="toggleDropdownMenu('userRole')">
+                        <span class="dropdown-text text-gray-700">管理员</span>
+                        <svg class="dropdown-arrow w-4 h-4 text-gray-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+                    <input type="hidden" id="userRole" value="admin">
+                    <div class="dropdown-menu absolute z-50 w-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 hidden max-h-60 overflow-y-auto" id="userRole_menu">
+                        <div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors bg-orange-50 text-orange-700" data-value="admin" onclick="selectUserRoleOption('admin', '管理员')">管理员</div>
+                        <div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors" data-value="product_manager" onclick="selectUserRoleOption('product_manager', '产品经理')">产品经理</div>
+                        <div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors" data-value="developer" onclick="selectUserRoleOption('developer', '技术开发')">技术开发</div>
+                    </div>
+                </div>
             </div>
+            <!-- 状态 - 自定义下拉菜单 -->
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">状态</label>
-                <select id="userStatus" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500">
-                    <option value="active">正常</option>
-                    <option value="inactive">停用</option>
-                </select>
+                <div class="custom-dropdown relative" id="userStatus_container">
+                    <button type="button" 
+                            class="dropdown-trigger w-full h-10 px-4 py-2 rounded-lg border border-gray-300 bg-white text-left text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all flex items-center justify-between"
+                            onclick="toggleDropdownMenu('userStatus')">
+                        <span class="dropdown-text text-gray-700">正常</span>
+                        <svg class="dropdown-arrow w-4 h-4 text-gray-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+                    <input type="hidden" id="userStatus" value="active">
+                    <div class="dropdown-menu absolute z-50 w-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 hidden max-h-60 overflow-y-auto" id="userStatus_menu">
+                        <div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors bg-orange-50 text-orange-700" data-value="active" onclick="selectUserStatusOption('active', '正常')">正常</div>
+                        <div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors" data-value="inactive" onclick="selectUserStatusOption('inactive', '停用')">停用</div>
+                    </div>
+                </div>
             </div>
             <div class="flex gap-3 mt-6">
                 <button type="button" onclick="closeModal()" class="flex-1 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium">取消</button>
@@ -143,182 +210,8 @@
         </form>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_js %}
-// 分页相关
-let currentPage = 1;
-const perPage = 20;
-
-// 缓存当前页面用户数据
-let currentUsers = [];
-
-// 检查管理员权限
-async function checkAdmin() {
-    try {
-        const response = await fetch('/api/auth/me');
-        if (!response.ok) {
-            window.location.href = '/login';
-            return;
-        }
-        const user = await response.json();
-        if (user.role !== 'admin') {
-            window.location.href = '/';
-            return;
-        }
-        loadUsers();
-    } catch (error) {
-        window.location.href = '/login';
-    }
-}
-
-// 加载用户列表
-async function loadUsers(page = 1) {
-    currentPage = page;
-    const search = document.getElementById('searchInput').value;
-    const status = document.getElementById('statusFilter').value;
-    const role = document.getElementById('roleFilter').value;
-    
-    try {
-        // 构建查询参数
-        let url = `/api/users?page=${page}&per_page=${perPage}`;
-        if (search) url += `&search=${encodeURIComponent(search)}`;
-        if (status) url += `&status=${status}`;
-        if (role) url += `&role=${role}`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        currentUsers = data.items;
-        const users = currentUsers;
-        const totalPages = Math.ceil(data.total / perPage);
-        
-        // 渲染列表
-        const listEl = document.getElementById('userList');
-        listEl.innerHTML = users.map(user => `
-            <tr>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${escapeHtml(user.name)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.employee_id}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    ${user.role === 'admin' ? '管理员' : user.role === 'product_manager' ? '产品经理' : '技术开发'}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                    <span class="px-2 py-1 text-xs rounded-full ${user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-                        ${user.status === 'active' ? '正常' : '停用'}
-                    </span>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    ${user.created_at}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button onclick="editUser(${user.id})" class="text-orange-600 hover:text-orange-800">编辑</button>
-                </td>
-            </tr>
-        `).join('');
-        
-        // 渲染分页
-        const pageEl = document.getElementById('pagination');
-        let pageHtml = '';
-        for (let i = 1; i <= totalPages; i++) {
-            pageHtml += `<button onclick="loadUsers(${i})" class="px-3 py-1 rounded ${i === page ? 'bg-orange-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}">${i}</button>`;
-        }
-        pageEl.innerHTML = pageHtml;
-        
-    } catch (error) {
-        console.error('加载失败:', error);
-        showToast('加载失败', 'error');
-    }
-}
-
-// 重置筛选条件
-function resetFilters() {
-    document.getElementById('searchInput').value = '';
-    document.getElementById('statusFilter').value = '';
-    document.getElementById('roleFilter').value = '';
-    loadUsers(1);
-}
-
-function showAddModal() {
-    document.getElementById('modalTitle').textContent = '添加用户';
-    document.getElementById('userForm').reset();
-    document.getElementById('userId').value = '';
-    document.getElementById('userPassword').required = true;
-    document.getElementById('userModal').classList.remove('hidden');
-}
-
-async function editUser(id) {
-    const user = currentUsers.find(u => u.id === id);
-    if (!user) {
-        // 如果缓存中没有，从后端获取
-        try {
-            const response = await fetch(`/api/users/${id}`);
-            if (!response.ok) throw new Error('获取用户失败');
-            const userData = await response.json();
-            fillEditForm(userData);
-        } catch (error) {
-            console.error('加载用户失败:', error);
-            showToast('加载用户失败', 'error');
-        }
-        return;
-    }
-    
-    fillEditForm(user);
-}
-
-function fillEditForm(user) {
-    document.getElementById('modalTitle').textContent = '编辑用户';
-    document.getElementById('userId').value = user.id;
-    document.getElementById('userName').value = user.name;
-    document.getElementById('userEmployeeId').value = user.employee_id;
-    document.getElementById('userRole').value = user.role;
-    document.getElementById('userStatus').value = user.status;
-    document.getElementById('userPassword').required = false;
-    document.getElementById('userPassword').value = '';
-    document.getElementById('userModal').classList.remove('hidden');
-}
-
-function closeModal() {
-    document.getElementById('userModal').classList.add('hidden');
-}
-
-document.getElementById('userForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const userId = document.getElementById('userId').value;
-    const data = {
-        name: document.getElementById('userName').value,
-        employee_id: document.getElementById('userEmployeeId').value,
-        role: document.getElementById('userRole').value,
-        status: document.getElementById('userStatus').value
-    };
-    
-    const password = document.getElementById('userPassword').value;
-    if (password) {
-        data.password = password;
-    }
-    
-    try {
-        const url = userId ? `/api/users/${userId}` : '/api/users';
-        const method = userId ? 'PUT' : 'POST';
-        
-        const response = await fetch(url, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        
-        if (response.ok) {
-            closeModal();
-            loadUsers();
-            showToast(userId ? '用户更新成功' : '用户添加成功', 'success');
-        } else {
-            const res = await response.json();
-            showToast(res.detail || '操作失败', 'error');
-        }
-    } catch (error) {
-        showToast('网络错误', 'error');
-    }
-});
-
-// 覆盖初始化函数，使用管理员检查
-checkAdmin();
+<!-- 页面脚本 -->
+<script src="/static/js/components/dropdown.js"></script>
+<script src="/static/js/pages/admin.js"></script>
 {% endblock %}

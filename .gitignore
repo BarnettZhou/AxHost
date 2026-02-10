@@ -58,6 +58,12 @@ docs/build/
 # electron-app
 electron-app/
 
+# design
+design/
+
+# docs
+docs/
+
 # Temporary files
 *.tmp
 *.temp
