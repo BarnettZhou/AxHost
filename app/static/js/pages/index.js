@@ -225,8 +225,10 @@ function renderCardView(projects) {
                 <!-- 备注 -->
                 <div class="text-sm">
                     ${hasRemark ? `
-                        <span class="text-gray-600 line-clamp-1">${escapeHtml(shortRemark)}${needMore ? '...' : ''}</span>
-                        ${needMore ? `<button onclick="showRemarkModal('${escapeHtml(project.remark)}')" class="text-orange-600 hover:text-orange-700 text-xs mt-1">更多</button>` : ''}
+                        <div class="flex items-center gap-1">
+                            <span class="text-gray-600 line-clamp-1 flex-1">${escapeHtml(shortRemark)}${needMore ? '...' : ''}</span>
+                            ${needMore ? `<button onclick="showRemarkModal('${escapeHtml(project.remark)}')" class="text-orange-600 hover:text-orange-700 text-xs flex-shrink-0">更多</button>` : ''}
+                        </div>
                     ` : '<span class="text-gray-400">无备注</span>'}
                 </div>
             </div>
@@ -275,8 +277,10 @@ function renderListView(projects) {
                 <div class="col-span-2 text-sm text-gray-500">${project.updated_at}</div>
                 <div class="col-span-3 text-sm">
                     ${hasRemark ? `
-                        <span class="text-gray-600 truncate inline-block max-w-full">${escapeHtml(shortRemark)}${needMore ? '...' : ''}</span>
-                        ${needMore ? `<button onclick="showRemarkModal('${escapeHtml(project.remark)}')" class="text-orange-600 hover:text-orange-700 text-xs ml-1">更多</button>` : ''}
+                        <div class="flex items-center gap-1">
+                            <span class="text-gray-600 truncate flex-1">${escapeHtml(shortRemark)}${needMore ? '...' : ''}</span>
+                            ${needMore ? `<button onclick="showRemarkModal('${escapeHtml(project.remark)}')" class="text-orange-600 hover:text-orange-700 text-xs flex-shrink-0">更多</button>` : ''}
+                        </div>
                     ` : '<span class="text-gray-400">无备注</span>'}
                 </div>
                 <div class="col-span-2 text-right">
