@@ -75,19 +75,6 @@ function switchProjectType(type) {
     }
 }
 
-// 重置筛选条件
-function resetFilters() {
-    document.getElementById('searchInput').value = '';
-    setDropdownValue('authorFilter', '');
-    
-    // 重置为我的项目
-    if (currentProjectType !== 'my') {
-        switchProjectType('my');
-    } else {
-        loadProjects(1);
-    }
-}
-
 // 加载项目列表
 async function loadProjects(page = 1) {
     currentPage = page;
@@ -356,12 +343,14 @@ function switchView(view) {
         cardView.classList.remove('hidden');
         listView.classList.add('hidden');
         renderCardView(projectsData);
+        showToast('已切换为卡片视图', 'info');
     } else {
         listBtn?.classList.add('active');
         cardBtn?.classList.remove('active');
         listView.classList.remove('hidden');
         cardView.classList.add('hidden');
         renderListView(projectsData);
+        showToast('已切换为列表视图', 'info');
     }
 }
 

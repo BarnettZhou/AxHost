@@ -59,24 +59,24 @@ async function loadUsers(page = 1) {
         // 渲染列表
         const listEl = document.getElementById('userList');
         listEl.innerHTML = users.map(user => `
-            <tr>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${escapeHtml(user.name)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.employee_id}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            <div class="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-gray-50 transition-colors">
+                <div class="col-span-2 text-sm font-medium text-gray-900 whitespace-nowrap">${escapeHtml(user.name)}</div>
+                <div class="col-span-2 text-sm text-gray-500 whitespace-nowrap">${user.employee_id}</div>
+                <div class="col-span-2 text-sm text-gray-500 whitespace-nowrap">
                     ${roleMap[user.role] || user.role}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
+                </div>
+                <div class="col-span-2 whitespace-nowrap">
                     <span class="px-2 py-1 text-xs rounded-full ${user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
                         ${statusMap[user.status] || user.status}
                     </span>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                </div>
+                <div class="col-span-2 text-sm text-gray-500 whitespace-nowrap">
                     ${user.created_at}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                </div>
+                <div class="col-span-2 text-right text-sm font-medium whitespace-nowrap">
                     <button onclick="editUser(${user.id})" class="text-orange-600 hover:text-orange-800">编辑</button>
-                </td>
-            </tr>
+                </div>
+            </div>
         `).join('');
         
         // 渲染分页
@@ -91,14 +91,6 @@ async function loadUsers(page = 1) {
         console.error('加载失败:', error);
         showToast('加载失败', 'error');
     }
-}
-
-// 重置筛选条件
-function resetFilters() {
-    document.getElementById('searchInput').value = '';
-    setDropdownValue('statusFilter', '');
-    setDropdownValue('roleFilter', '');
-    loadUsers(1);
 }
 
 // 筛选下拉菜单选择回调

@@ -7,9 +7,89 @@
     <script src="/static/js/tailwindcss.js"></script>
     <link href="/static/css/inter-font.css" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .gradient-text { background: linear-gradient(135deg, #FF6600 0%, #FF8533 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         
+        html, body {
+            font-family: 'Inter', sans-serif;
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        .gradient-text { 
+            background: linear-gradient(135deg, #FF6600 0%, #FF8533 100%); 
+            -webkit-background-clip: text; 
+            -webkit-text-fill-color: transparent; 
+        }
+        
+        /* 页面布局容器 */
+        .page-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* 导航栏吸顶 */
+        .navbar-sticky {
+            flex-shrink: 0;
+            position: sticky;
+            top: 0;
+            z-index: 40;
+        }
+        
+        /* 主内容区域 - 占满剩余空间 */
+        .main-wrapper {
+            flex: 1;
+            overflow: hidden;
+            padding: 16px 24px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* 主内容区域卡片样式 */
+        .main-card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            padding: 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            max-width: 1280px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        /* 可滚动内容区域 */
+        .scrollable-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            margin-top: 16px;
+        }
+        
+        /* 自定义滚动条 */
+        .scrollable-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        .scrollable-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+        .scrollable-content::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        .scrollable-content::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        
+
         /* 下拉菜单动画 */
         .dropdown-menu {
             opacity: 0;
@@ -48,8 +128,8 @@
         
         /* 切换按钮组样式 */
         .switch-group {
-            background-color: #f3f4f6; /* gray-100 */
-            border: 1px solid #e5e7eb; /* gray-200 */
+            background-color: #f3f4f6;
+            border: 1px solid #e5e7eb;
         }
         .switch-btn {
             transition: all 0.2s ease;
@@ -58,28 +138,26 @@
             background-color: #FF6600;
             color: white;
         }
-        
-        /* 主内容区域卡片样式 */
-        .main-card {
-            background-color: white;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-            padding: 24px;
-            margin: 0 auto;
-        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
-<body class="bg-[#f9f9f9] min-h-screen">
-    <!-- 导航栏 -->
-    {% block navbar %}
-        {% set logo_text = navbar_logo_text|default('AxHost') %}
-        {% set logo_href = navbar_logo_href|default('/') %}
-        {% include "components/navbar.html" %}
-    {% endblock %}
+<body class="bg-[#f9f9f9]">
+    <div class="page-container">
+        <!-- 导航栏 - 吸顶 -->
+        <div class="navbar-sticky">
+            {% block navbar %}
+                {% set logo_text = navbar_logo_text|default('AxHost') %}
+                {% set logo_href = navbar_logo_href|default('/') %}
+                {% include "components/navbar.html" %}
+            {% endblock %}
+        </div>
 
-    <!-- 主内容 -->
-    {% block content %}{% endblock %}
+        <!-- 主内容 -->
+        <div class="main-wrapper">
+            {% block content %}{% endblock %}
+        </div>
+
+    </div>
 
     <!-- 修改密码模态框组件 -->
     {% include "components/password_modal.html" %}
@@ -89,5 +167,7 @@
 
     <!-- 全局脚本组件 -->
     {% include "components/scripts.html" %}
+    
+    {% block extra_js %}{% endblock %}
 </body>
 </html>
