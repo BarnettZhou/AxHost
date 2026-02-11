@@ -1,20 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse
 from app.routers.auth import get_current_user
-from app.models.models import User, Project, ProjectAccess
+from app.models.models import User, Project, ProjectAccess, Tag
 from sqlalchemy.orm import Session
 from typing import Optional
 import os
 import shutil
 import zipfile
 import urllib.parse
+import json
 from app.core.database import get_db
 
 from app.schemas.schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, 
     ProjectListResponse, ProjectVerifyRequest, ChangeAuthorRequest
 )
-from app.services.services import ProjectService, UserService, generate_password
+from app.services.services import ProjectService, UserService, TagService, generate_password
 
 router = APIRouter(prefix="/api/projects", tags=["原型管理"])
 
@@ -64,11 +65,40 @@ def format_to_cst(dt):
     return cst_time.strftime("%Y-%m-%d %H:%M:%S")
 
 
+def serialize_tag(tag: Tag):
+    return {
+        "id": tag.id,
+        "name": tag.name,
+        "emoji": tag.emoji,
+        "color": tag.color,
+        "creator_id": tag.creator_id,
+        "created_at": tag.created_at,
+    }
+
+
+def serialize_project(project: Project):
+    return {
+        "id": project.id,
+        "object_id": project.object_id,
+        "name": project.name,
+        "author_id": project.author_id,
+        "author_name": project.author.name if project.author else "未知",
+        "view_password": project.view_password,
+        "is_public": project.is_public,
+        "remark": project.remark,
+        "tags": [serialize_tag(tag) for tag in ProjectService.get_tags(project)],
+        "created_at": format_to_cst(project.created_at),
+        "updated_at": format_to_cst(project.updated_at),
+        "can_access": True,
+    }
+
+
 @router.get("")
 def list_projects(
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
     search: str = Query(""),
+    tag_id: Optional[int] = Query(None),
     author_id: Optional[int] = Query(None),
     project_type: Optional[str] = Query(None, description="my:我的项目, collaborate:协作项目"),
     db: Session = Depends(get_db),
@@ -89,6 +119,8 @@ def list_projects(
     # 搜索项目名称
     if search:
         query = query.filter(Project.name.ilike(f"%{search}%"))
+    if tag_id is not None:
+        query = query.filter(Project.project_tags.any(tag_id=tag_id))
     
     # 项目类型筛选
     if project_type == "my":
@@ -119,22 +151,7 @@ def list_projects(
     projects = query.order_by(Project.updated_at.desc()).offset(skip).limit(per_page).all()
     
     # 标记可访问状态
-    result = []
-    for project in projects:
-        p_dict = {
-            "id": project.id,
-            "object_id": project.object_id,
-            "name": project.name,
-            "author_id": project.author_id,
-            "author_name": project.author.name if project.author else "未知",
-            "view_password": project.view_password,
-            "is_public": project.is_public,
-            "remark": project.remark,
-            "created_at": format_to_cst(project.created_at),
-            "updated_at": format_to_cst(project.updated_at),
-            "can_access": True
-        }
-        result.append(p_dict)
+    result = [serialize_project(project) for project in projects]
     
     return {
         "items": result,
@@ -152,7 +169,10 @@ def create_project(
     if not can_upload(current_user):
         raise HTTPException(status_code=403, detail="只有管理员和产品经理可以上传原型")
     
-    project = ProjectService.create(db, project_data, current_user.id)
+    try:
+        project = ProjectService.create(db, project_data, current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return {"message": "原型创建成功", "object_id": project.object_id}
 
 @router.post("/upload")
@@ -162,6 +182,7 @@ def upload_project(
     view_password: Optional[str] = Form(None),
     is_public: bool = Form(False),
     remark: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -169,13 +190,26 @@ def upload_project(
         raise HTTPException(status_code=403, detail="只有管理员和产品经理可以上传原型")
     
     # 创建项目记录
+    tag_names = []
+    if tags:
+        try:
+            parsed = json.loads(tags)
+            if isinstance(parsed, list):
+                tag_names = [str(name) for name in parsed]
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="标签格式错误")
+
     project_data = ProjectCreate(
         name=name,
         view_password=view_password,
         is_public=is_public,
-        remark=remark
+        remark=remark,
+        tag_names=tag_names,
     )
-    project = ProjectService.create(db, project_data, current_user.id)
+    try:
+        project = ProjectService.create(db, project_data, current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     
     # 保存文件
     project_dir = os.path.join(UPLOAD_DIR, project.object_id)
@@ -300,6 +334,8 @@ def get_project(
         "author_name": project.author.name if project.author else "未知",
         "view_password": project.view_password,
         "is_public": project.is_public,
+        "remark": project.remark,
+        "tags": [serialize_tag(tag) for tag in ProjectService.get_tags(project)],
         "created_at": project.created_at,
         "updated_at": project.updated_at,
         "can_access": True
@@ -340,7 +376,10 @@ def update_project(
     if project_data.view_password is not None and project_data.view_password != project.view_password:
         ProjectService.revoke_access(db, project)
     
-    ProjectService.update(db, project, project_data)
+    try:
+        ProjectService.update(db, project, project_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return {"message": "更新成功"}
 
 @router.delete("/{object_id}")

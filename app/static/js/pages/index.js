@@ -1,34 +1,287 @@
-// 项目数据相关
 let currentPage = 1;
 let currentView = localStorage.getItem('projectView') || 'card';
-let currentProjectType = 'my'; // my: 我的项目, collaborate: 协作项目
+let currentProjectType = 'my';
 let projectsData = [];
 let activeDropdown = null;
 
-// 初始化：加载保存的视图配置并应用
-document.addEventListener('DOMContentLoaded', () => {
-    // 应用保存的视图配置
-    if (currentView === 'list') {
-        document.getElementById('cardViewBtn')?.classList.remove('active');
-        document.getElementById('listViewBtn')?.classList.add('active');
-        document.getElementById('cardView')?.classList.add('hidden');
-        document.getElementById('listView')?.classList.remove('hidden');
-    }
-    // 加载作者列表（用于协作项目筛选）
-    loadAuthors();
-});
+let allTags = [];
+let commonTags = [];
+let selectedTagFilter = '';
+let manageTagSearch = '';
+let addTagColor = '#D3D3D3';
+let tagFormMode = 'create';
+let tagFormEditingId = null;
 
-// 加载作者列表（排除当前用户）
+let uploadSelectedTags = [];
+let editSelectedTags = [];
+
+const TAG_COLORS = [
+    { base: '#D3D3D3', highlight: '#444952' },
+    { base: '#B8E7F5', highlight: '#0078D4' },
+    { base: '#FFFFE0', highlight: '#FFAC00' },
+    { base: '#90EE90', highlight: '#008000' },
+    { base: '#FFDAB9', highlight: '#FF4500' },
+    { base: '#DDA0DD', highlight: '#800080' }
+];
+
+function colorHighlight(baseColor) {
+    const found = TAG_COLORS.find(item => item.base.toUpperCase() === (baseColor || '').toUpperCase());
+    return found ? found.highlight : '#444952';
+}
+
+function formatDisplayDate(dateStr) {
+    if (!dateStr) return '';
+    const currentYear = new Date().getFullYear();
+    const year = parseInt(dateStr.slice(0, 4), 10);
+    if (year === currentYear) {
+        return dateStr.slice(5);
+    }
+    return dateStr;
+}
+
+function tagChipHtml(tag, { compact = false, highlight = false, removable = false, removeFn = '' } = {}) {
+    const bgColor = highlight ? colorHighlight(tag.color || '#D3D3D3') : (tag.color || '#D3D3D3');
+    const textColor = highlight ? '#ffffff' : '#374151';
+    const name = escapeHtml(tag.name || '');
+    const emoji = tag.emoji ? `<span>${escapeHtml(tag.emoji)}</span>` : '';
+    const sizeClass = compact ? 'text-xs px-2 py-1' : 'text-xs px-2.5 py-1.5';
+    return `
+        <span class="inline-flex items-center gap-1 rounded-full ${sizeClass} border border-black/5" style="background:${bgColor};color:${textColor};">
+            ${emoji}
+            <span>${name}</span>
+            ${removable ? `<button type="button" onclick="${removeFn}" class="ml-1 text-current/80 hover:text-current">×</button>` : ''}
+        </span>
+    `;
+}
+
+function renderCardTags(tags) {
+    if (!tags || tags.length === 0) {
+        return '<span class="text-xs text-gray-400">无标签</span>';
+    }
+    const maxChars = 24;
+    let used = 0;
+    const visible = [];
+    for (const tag of tags) {
+        const len = (tag.name || '').length + 1;
+        if (visible.length > 0 && used + len > maxChars) break;
+        visible.push(tag);
+        used += len;
+    }
+    const hidden = tags.length - visible.length;
+    const chips = visible.map(tag => tagChipHtml(tag, { compact: true })).join('');
+    if (hidden <= 0) return `<div class="flex flex-wrap gap-1">${chips}</div>`;
+    const encoded = encodeURIComponent(JSON.stringify(tags));
+    return `
+        <div class="flex flex-wrap gap-1 items-center">
+            ${chips}
+            <button onclick="openProjectTagsModalEncoded('${encoded}')" class="inline-flex items-center rounded-full text-xs px-2 py-1 border border-gray-300 bg-white text-gray-600 hover:text-orange-600">+${hidden} 个标签</button>
+        </div>
+    `;
+}
+
+function renderListTags(tags) {
+    if (!tags || tags.length === 0) return '';
+    const max = 5;
+    const visible = tags.slice(0, max);
+    const hidden = tags.length - visible.length;
+    const chips = visible.map(tag => tagChipHtml(tag, { compact: true })).join('');
+    if (hidden <= 0) return `<div class="flex flex-wrap gap-1 mt-1">${chips}</div>`;
+    const encoded = encodeURIComponent(JSON.stringify(tags));
+    return `
+        <div class="flex flex-wrap gap-1 mt-1">
+            ${chips}
+            <button onclick="openProjectTagsModalEncoded('${encoded}')" class="inline-flex items-center rounded-full text-xs px-2 py-1 border border-gray-300 bg-white text-gray-600 hover:text-orange-600">+${hidden} 个标签</button>
+        </div>
+    `;
+}
+
+function renderProjectActionMenu(project, projectUrl, canManage, isAdmin) {
+    const copyItem = `
+        <button onclick="copyProjectLink('${projectUrl}')" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+            </svg>
+            复制链接
+        </button>
+    `;
+    const manageItems = canManage ? `
+        <button onclick="showUpdateModal('${project.object_id}', '${escapeHtml(project.name)}')" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+            </svg>
+            更新原型
+        </button>
+        <button onclick="showEditModalById('${project.object_id}')" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+            </svg>
+            修改信息
+        </button>
+        <button onclick="showDeleteModal('${project.object_id}', '${escapeHtml(project.name)}')" class="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+            </svg>
+            删除原型
+        </button>
+    ` : '';
+    const adminItem = isAdmin ? `
+        <button onclick="showChangeAuthorModal('${project.object_id}', '${escapeHtml(project.name)}')" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+            </svg>
+            更改作者
+        </button>
+    ` : '';
+    return `${copyItem}${manageItems}${adminItem}`;
+}
+
+function openProjectTagsModal(tags) {
+    const body = document.getElementById('projectTagsModalBody');
+    body.innerHTML = (tags || []).map(tag => tagChipHtml(tag)).join('') || '<span class="text-sm text-gray-400">无标签</span>';
+    document.getElementById('projectTagsModal').classList.remove('hidden');
+}
+
+function openProjectTagsModalEncoded(encoded) {
+    try {
+        const tags = JSON.parse(decodeURIComponent(encoded));
+        openProjectTagsModal(tags);
+    } catch (error) {
+        showToast('标签数据解析失败', 'error');
+    }
+}
+
+function closeProjectTagsModal() {
+    document.getElementById('projectTagsModal').classList.add('hidden');
+}
+
+function getCurrentUser() {
+    try {
+        if (typeof currentUser !== 'undefined' && currentUser) return currentUser;
+    } catch (error) {
+        // ignore
+    }
+    return window.currentUser || null;
+}
+
+async function ensureCurrentUserReady() {
+    if (getCurrentUser()) return getCurrentUser();
+    try {
+        const response = await fetch('/api/auth/me');
+        if (!response.ok) return null;
+        const user = await response.json();
+        try {
+            currentUser = user;
+        } catch (error) {
+            // ignore
+        }
+        window.currentUser = user;
+        return user;
+    } catch (error) {
+        return null;
+    }
+}
+
+function normalizeTagName(name) {
+    return (name || '').trim();
+}
+
+function uniqueTagNames(tags) {
+    const seen = new Set();
+    const names = [];
+    for (const tag of tags || []) {
+        const name = normalizeTagName(tag.name);
+        if (!name) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        names.push(name);
+    }
+    return names;
+}
+
+function getTagById(tagId) {
+    return allTags.find(tag => String(tag.id) === String(tagId));
+}
+
+function getTagByName(name) {
+    const key = normalizeTagName(name).toLowerCase();
+    return allTags.find(tag => tag.name.toLowerCase() === key);
+}
+
+function renderTagFilterOptions() {
+    const menu = document.getElementById('tagFilter_menu');
+    if (!menu) return;
+    const options = allTags.map(tag => `
+        <div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors" data-value="${tag.id}" onclick="selectTagFilter('${tag.id}', '${escapeHtml(tag.name)}')">${escapeHtml(tag.emoji || '')} ${escapeHtml(tag.name)}</div>
+    `).join('');
+    menu.innerHTML = '<div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors bg-orange-50 text-orange-700" data-value="" onclick="selectTagFilter(\'\', \'全部标签\')">全部标签</div>' + options;
+}
+
+function renderQuickTagFilters() {
+    const container = document.getElementById('quickTagFilters');
+    if (!container) return;
+    if (!commonTags.length) {
+        container.innerHTML = '<span class="text-xs text-gray-400">暂无常用标签</span>';
+        return;
+    }
+    container.innerHTML = commonTags.map(tag => {
+        const active = String(selectedTagFilter) === String(tag.id);
+        return `<button type="button" onclick="toggleQuickTagFilter('${tag.id}')">${tagChipHtml(tag, { compact: true, highlight: active })}</button>`;
+    }).join('');
+}
+
+function toggleQuickTagFilter(tagId) {
+    const next = String(selectedTagFilter) === String(tagId) ? '' : String(tagId);
+    if (next) {
+        const tag = getTagById(next);
+        if (tag) {
+            selectedTagFilter = next;
+            setDropdownValue('tagFilter', next);
+        }
+    } else {
+        selectedTagFilter = '';
+        selectDropdownOption('tagFilter', '', '全部标签');
+    }
+    loadProjects(1);
+    renderQuickTagFilters();
+}
+
+function selectTagFilter(value, label) {
+    selectedTagFilter = value ? String(value) : '';
+    selectDropdownOption('tagFilter', selectedTagFilter, label || '全部标签');
+    loadProjects(1);
+    renderQuickTagFilters();
+}
+
+async function loadTags(search = '') {
+    const response = await fetch(`/api/tags?search=${encodeURIComponent(search)}`);
+    if (!response.ok) throw new Error('加载标签失败');
+    return response.json();
+}
+
+async function loadCommonTags() {
+    const response = await fetch('/api/tags/common');
+    if (!response.ok) throw new Error('加载常用标签失败');
+    return response.json();
+}
+
+async function refreshTagsData() {
+    [allTags, commonTags] = await Promise.all([loadTags(), loadCommonTags()]);
+    renderTagFilterOptions();
+    renderQuickTagFilters();
+    renderManageTagLists();
+}
+
 async function loadAuthors() {
     try {
+        const me = getCurrentUser();
         const response = await fetch('/api/users/options');
         const users = await response.json();
         const menu = document.getElementById('authorFilter_menu');
         if (!menu) return;
-        // 保留"全部作者"选项，添加其他作者（排除当前用户）
         const defaultOption = '<div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors bg-orange-50 text-orange-700" data-value="" onclick="selectAuthorOption(\'\', \'全部作者\')">全部作者</div>';
         const options = users
-            .filter(u => u.id !== currentUser.id)
+            .filter(u => !me || u.id !== me.id)
             .map(u => `<div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors" data-value="${u.id}" onclick="selectAuthorOption(${u.id}, '${escapeHtml(u.name)}')">${escapeHtml(u.name)}</div>`)
             .join('');
         menu.innerHTML = defaultOption + options;
@@ -37,287 +290,160 @@ async function loadAuthors() {
     }
 }
 
-// 选择作者筛选选项
 function selectAuthorOption(value, label) {
     selectDropdownOption('authorFilter', value, label);
-    loadProjects();
+    loadProjects(1);
 }
 
-// 切换项目类型
 function switchProjectType(type) {
     currentProjectType = type;
-    
-    // 更新按钮样式
+
     const myBtn = document.getElementById('myProjectBtn');
     const collabBtn = document.getElementById('collaborateBtn');
     const authorFilter = document.getElementById('authorFilterContainer');
-    
+
     if (type === 'my') {
         myBtn?.classList.add('active');
         myBtn?.classList.remove('text-gray-600');
         collabBtn?.classList.remove('active');
         collabBtn?.classList.add('text-gray-600');
-        // 隐藏作者筛选 - 使用 opacity 和 pointer-events 避免布局跳动
         authorFilter.classList.add('opacity-0', 'pointer-events-none');
         authorFilter.classList.remove('opacity-100');
-        // 清空作者筛选
         setDropdownValue('authorFilter', '');
-        loadProjects(1);
     } else {
         collabBtn?.classList.add('active');
         collabBtn?.classList.remove('text-gray-600');
         myBtn?.classList.remove('active');
         myBtn?.classList.add('text-gray-600');
-        // 显示作者筛选
         authorFilter.classList.remove('opacity-0', 'pointer-events-none');
         authorFilter.classList.add('opacity-100');
-        loadProjects(1);
     }
+    loadProjects(1);
 }
 
-// 加载项目列表
 async function loadProjects(page = 1) {
     currentPage = page;
     const search = document.getElementById('searchInput').value;
     const authorId = document.getElementById('authorFilter')?.value || '';
-    
-    // 构建查询参数
+
     let url = `/api/projects?page=${page}&per_page=12&search=${encodeURIComponent(search)}&project_type=${currentProjectType}`;
     if (authorId && currentProjectType === 'collaborate') {
         url += `&author_id=${authorId}`;
     }
-    
+    if (selectedTagFilter) {
+        url += `&tag_id=${selectedTagFilter}`;
+    }
+
     try {
         const response = await fetch(url);
         const data = await response.json();
-        projectsData = data.items;
-        
+        projectsData = data.items || [];
+
         if (currentView === 'card') {
-            renderCardView(data.items);
+            renderCardView(projectsData);
         } else {
-            renderListView(data.items);
+            renderListView(projectsData);
         }
-        
-        // 分页
-        const totalPages = Math.ceil(data.total / data.per_page);
+
+        const totalPages = Math.ceil((data.total || 0) / (data.per_page || 1));
         const pageEl = document.getElementById('pagination');
         let pageHtml = '';
         for (let i = 1; i <= totalPages; i++) {
             pageHtml += `<button onclick="loadProjects(${i})" class="px-3 py-1 rounded ${i === page ? 'bg-orange-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}">${i}</button>`;
         }
         pageEl.innerHTML = pageHtml;
-        
     } catch (error) {
         console.error('加载失败:', error);
         showToast('加载失败', 'error');
     }
 }
 
-// 渲染卡片视图
 function renderCardView(projects) {
     const listEl = document.getElementById('cardView');
-    if (projects.length === 0) {
+    if (!projects.length) {
         listEl.innerHTML = '<div class="col-span-full text-center py-12 text-gray-400">暂无原型项目</div>';
         return;
     }
-    
+
     listEl.innerHTML = projects.map(project => {
-        const canManage = currentUser && (currentUser.role === 'admin' || project.author_id === currentUser.id);
-        const isAdmin = currentUser && currentUser.role === 'admin';
+        const me = getCurrentUser();
+        const canManage = me && (me.role === 'admin' || project.author_id === me.id);
+        const isAdmin = me && me.role === 'admin';
         const projectUrl = `${window.location.origin}/projects/${project.object_id}/`;
         const hasRemark = project.remark && project.remark.trim();
-        const shortRemark = hasRemark ? project.remark.replace(/\\n/g, ' ').substring(0, 30) : '';
-        const needMore = hasRemark && project.remark.length > 30;
-        
+        const shortRemark = hasRemark ? project.remark.replace(/\n/g, ' ').substring(0, 48) : '';
+        const needMore = hasRemark && project.remark.length > 48;
+
         return `
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 card-hover transition-all relative group flex flex-col">
-                <!-- 第一行：标签 + 项目标题 + 作者 + 更多按钮 -->
                 <div class="flex items-start justify-between mb-2">
                     <div class="flex items-center gap-2 flex-1 min-w-0">
-                        ${project.is_public ? 
-                            '<span class="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full flex-shrink-0">公开</span>' :
-                            '<span class="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full flex-shrink-0">私密</span>'
-                        }
+                        ${project.is_public ? '<span class="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full flex-shrink-0">公开</span>' : '<span class="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full flex-shrink-0">私密</span>'}
                         <h3 class="font-semibold text-gray-900 truncate cursor-pointer hover:text-orange-600" onclick="viewProject('${project.object_id}')">${escapeHtml(project.name)}</h3>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0 ml-2">
                         <div class="flex items-center gap-1 text-sm text-gray-500">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                            </svg>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                             <span class="truncate max-w-[80px]">${escapeHtml(project.author_name)}</span>
                         </div>
-                        <!-- 更多按钮 -->
                         <div class="relative">
                             <button onclick="toggleDropdown(event, '${project.object_id}')" class="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"></path>
-                                </svg>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"></path></svg>
                             </button>
                             <div id="dropdown-${project.object_id}" class="dropdown-menu absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-                                <button onclick="copyProjectLink('${projectUrl}')" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                                    </svg>
-                                    复制链接
-                                </button>
-                                ${canManage ? `
-                                <button onclick="showUpdateModal('${project.object_id}', '${escapeHtml(project.name)}')" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                                    </svg>
-                                    更新原型
-                                </button>
-                                <button onclick="showEditModal('${project.object_id}', '${escapeHtml(project.name)}', ${project.is_public}, '${project.view_password || ''}', '${escapeHtml(project.remark || '')}')" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                    </svg>
-                                    修改信息
-                                </button>
-                                <button onclick="showToast('编辑标签功能即将上线', 'info')" class="w-full px-4 py-2 text-left text-sm text-gray-400 cursor-not-allowed flex items-center gap-2">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
-                                    </svg>
-                                    编辑标签
-                                </button>
-                                <button onclick="showDeleteModal('${project.object_id}', '${escapeHtml(project.name)}')" class="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                    </svg>
-                                    删除原型
-                                </button>
-                                ` : ''}
-                                ${isAdmin ? `
-                                <button onclick="showChangeAuthorModal('${project.object_id}', '${escapeHtml(project.name)}')" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                                    </svg>
-                                    更改作者
-                                </button>
-                                ` : ''}
+                                ${renderProjectActionMenu(project, projectUrl, canManage, isAdmin)}
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <!-- 第二行：标签列表 + 最后更新时间 -->
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-xs text-gray-300">标签功能即将上线</span>
-                    <span class="text-xs text-gray-400">${project.updated_at}</span>
+                <div class="flex items-center justify-between mb-2">
+                    ${hasRemark ? `<button type="button" onclick="showRemarkModal('${escapeHtml(project.remark)}')" class="text-sm text-gray-600 truncate pr-3 text-left hover:text-orange-600">${escapeHtml(shortRemark)}${needMore ? '...' : ''}</button>` : '<span class="text-sm text-gray-400">无备注</span>'}
+                    <span class="text-xs text-gray-400 flex-shrink-0">${formatDisplayDate(project.updated_at)}</span>
                 </div>
-                
-                <!-- 分割线 -->
                 <div class="border-t border-gray-100 my-2"></div>
-                
-                <!-- 备注 -->
-                <div class="text-sm">
-                    ${hasRemark ? `
-                        <div class="flex items-center gap-1">
-                            <span class="text-gray-600 line-clamp-1 flex-1">${escapeHtml(shortRemark)}${needMore ? '...' : ''}</span>
-                            ${needMore ? `<button onclick="showRemarkModal('${escapeHtml(project.remark)}')" class="text-orange-600 hover:text-orange-700 text-xs flex-shrink-0">更多</button>` : ''}
-                        </div>
-                    ` : '<span class="text-gray-400">无备注</span>'}
-                </div>
+                <div class="text-sm">${renderCardTags(project.tags || [])}</div>
             </div>
         `;
     }).join('');
 }
 
-// 显示备注详情弹窗
-function showRemarkModal(remark) {
-    document.getElementById('remarkContent').textContent = remark;
-    document.getElementById('remarkModal').classList.remove('hidden');
-}
-
-function closeRemarkModal() {
-    document.getElementById('remarkModal').classList.add('hidden');
-}
-
-// 渲染列表视图
 function renderListView(projects) {
     const tbody = document.getElementById('listViewBody');
-    if (projects.length === 0) {
+    if (!projects.length) {
         tbody.innerHTML = '<div class="px-6 py-12 text-center text-gray-400">暂无原型项目</div>';
         return;
     }
-    
+
     tbody.innerHTML = projects.map(project => {
-        const canManage = currentUser && (currentUser.role === 'admin' || project.author_id === currentUser.id);
-        const isAdmin = currentUser && currentUser.role === 'admin';
+        const me = getCurrentUser();
+        const canManage = me && (me.role === 'admin' || project.author_id === me.id);
+        const isAdmin = me && me.role === 'admin';
         const projectUrl = `${window.location.origin}/projects/${project.object_id}/`;
         const hasRemark = project.remark && project.remark.trim();
-        const shortRemark = hasRemark ? project.remark.replace(/\\n/g, ' ').substring(0, 20) : '';
+        const shortRemark = hasRemark ? project.remark.replace(/\n/g, ' ').substring(0, 20) : '';
         const needMore = hasRemark && project.remark.length > 20;
-        
+
         return `
             <div class="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-gray-50 transition-colors">
                 <div class="col-span-2">
                     <div class="font-medium text-gray-900 cursor-pointer hover:text-orange-600 truncate" onclick="viewProject('${project.object_id}')">${escapeHtml(project.name)}</div>
                 </div>
-                <div class="col-span-2 text-sm text-gray-500 truncate">${escapeHtml(project.author_name)}</div>
-                <div class="col-span-1">
-                    ${project.is_public ? 
-                        '<span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">公开</span>' :
-                        '<span class="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">私密</span>'
-                    }
+                <div class="col-span-2">
+                    ${renderListTags(project.tags || [])}
                 </div>
-                <div class="col-span-2 text-sm text-gray-500">${project.updated_at}</div>
-                <div class="col-span-3 text-sm">
-                    ${hasRemark ? `
-                        <div class="flex items-center gap-1">
-                            <span class="text-gray-600 truncate flex-1">${escapeHtml(shortRemark)}${needMore ? '...' : ''}</span>
-                            ${needMore ? `<button onclick="showRemarkModal('${escapeHtml(project.remark)}')" class="text-orange-600 hover:text-orange-700 text-xs flex-shrink-0">更多</button>` : ''}
-                        </div>
-                    ` : '<span class="text-gray-400">无备注</span>'}
+                <div class="col-span-1 text-sm text-gray-500 truncate">${escapeHtml(project.author_name)}</div>
+                <div class="col-span-1">${project.is_public ? '<span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">公开</span>' : '<span class="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">私密</span>'}</div>
+                <div class="col-span-2 text-sm text-gray-500">${formatDisplayDate(project.updated_at)}</div>
+                <div class="col-span-2 text-sm">
+                    ${hasRemark ? `<div class="flex items-center gap-1"><span class="text-gray-600 truncate flex-1">${escapeHtml(shortRemark)}${needMore ? '...' : ''}</span>${needMore ? `<button onclick="showRemarkModal('${escapeHtml(project.remark)}')" class="text-orange-600 hover:text-orange-700 text-xs flex-shrink-0">更多</button>` : ''}</div>` : '<span class="text-gray-400">无备注</span>'}
                 </div>
                 <div class="col-span-2 text-right">
                     <div class="relative inline-block">
                         <button onclick="toggleDropdown(event, 'list-${project.object_id}')" class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
-                            </svg>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
                         </button>
                         <div id="dropdown-list-${project.object_id}" class="dropdown-menu absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
-                            <button onclick="copyProjectLink('${projectUrl}')" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                                </svg>
-                                复制链接
-                            </button>
-                            ${canManage ? `
-                            <button onclick="showUpdateModal('${project.object_id}', '${escapeHtml(project.name)}')" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                                </svg>
-                                更新原型
-                            </button>
-                            <button onclick="showEditModal('${project.object_id}', '${escapeHtml(project.name)}', ${project.is_public}, '${project.view_password || ''}', '${escapeHtml(project.remark || '')}')" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                </svg>
-                                修改信息
-                            </button>
-                            <button onclick="showToast('编辑标签功能即将上线', 'info')" class="w-full px-4 py-2 text-left text-sm text-gray-400 cursor-not-allowed flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
-                                </svg>
-                                编辑标签
-                            </button>
-                            <button onclick="showDeleteModal('${project.object_id}', '${escapeHtml(project.name)}')" class="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                </svg>
-                                删除原型
-                            </button>
-                            ` : ''}
-                            ${isAdmin ? `
-                            <button onclick="showChangeAuthorModal('${project.object_id}', '${escapeHtml(project.name)}')" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                                </svg>
-                                更改作者
-                            </button>
-                            ` : ''}
+                            ${renderProjectActionMenu(project, projectUrl, canManage, isAdmin)}
                         </div>
                     </div>
                 </div>
@@ -326,52 +452,41 @@ function renderListView(projects) {
     }).join('');
 }
 
-// 切换视图
 function switchView(view) {
     currentView = view;
-    // 保存到 localStorage
     localStorage.setItem('projectView', view);
-    
+
     const cardBtn = document.getElementById('cardViewBtn');
     const listBtn = document.getElementById('listViewBtn');
     const cardView = document.getElementById('cardView');
     const listView = document.getElementById('listView');
-    
+
     if (view === 'card') {
         cardBtn?.classList.add('active');
         listBtn?.classList.remove('active');
         cardView.classList.remove('hidden');
         listView.classList.add('hidden');
         renderCardView(projectsData);
-        showToast('已切换为卡片视图', 'info');
     } else {
         listBtn?.classList.add('active');
         cardBtn?.classList.remove('active');
         listView.classList.remove('hidden');
         cardView.classList.add('hidden');
         renderListView(projectsData);
-        showToast('已切换为列表视图', 'info');
     }
 }
 
-// 切换项目卡片下拉菜单
 function toggleDropdown(event, projectId) {
     event.stopPropagation();
-    
-    // 关闭自定义下拉菜单
-    document.querySelectorAll('.custom-dropdown .dropdown-menu').forEach(menu => {
-        menu.classList.add('hidden');
-    });
-    document.querySelectorAll('.custom-dropdown .dropdown-arrow').forEach(arrow => {
-        arrow.classList.remove('rotate-180');
-    });
-    
-    // 关闭之前打开的项目下拉菜单
+
+    document.querySelectorAll('.custom-dropdown .dropdown-menu').forEach(menu => menu.classList.add('hidden'));
+    document.querySelectorAll('.custom-dropdown .dropdown-arrow').forEach(arrow => arrow.classList.remove('rotate-180'));
+
     if (activeDropdown && activeDropdown !== `dropdown-${projectId}`) {
         const prevDropdown = document.getElementById(activeDropdown);
         if (prevDropdown) prevDropdown.classList.remove('show');
     }
-    
+
     const dropdown = document.getElementById(`dropdown-${projectId}`);
     if (dropdown) {
         dropdown.classList.toggle('show');
@@ -379,13 +494,8 @@ function toggleDropdown(event, projectId) {
     }
 }
 
-// 点击其他地方关闭项目卡片下拉菜单（不干扰自定义下拉菜单）
 document.addEventListener('click', (e) => {
-    // 如果点击的是自定义下拉菜单内部，不处理
-    if (e.target.closest('.custom-dropdown')) {
-        return;
-    }
-    
+    if (e.target.closest('.custom-dropdown')) return;
     if (activeDropdown) {
         const dropdown = document.getElementById(activeDropdown);
         if (dropdown) dropdown.classList.remove('show');
@@ -393,20 +503,17 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// 设置文件上传拖拽
 function setupFileUpload() {
     const zone = document.getElementById('uploadZone');
     const input = document.getElementById('projectFile');
-    
+
     zone.addEventListener('dragover', (e) => {
         e.preventDefault();
         zone.classList.add('dragover');
     });
-    
-    zone.addEventListener('dragleave', () => {
-        zone.classList.remove('dragover');
-    });
-    
+
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+
     zone.addEventListener('drop', (e) => {
         e.preventDefault();
         zone.classList.remove('dragover');
@@ -416,27 +523,23 @@ function setupFileUpload() {
             updateFileDisplay(files[0], 'upload');
         }
     });
-    
+
     input.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            updateFileDisplay(e.target.files[0], 'upload');
-        }
+        if (e.target.files.length > 0) updateFileDisplay(e.target.files[0], 'upload');
     });
 }
 
 function setupUpdateFileUpload() {
     const zone = document.getElementById('updateUploadZone');
     const input = document.getElementById('updateProjectFile');
-    
+
     zone.addEventListener('dragover', (e) => {
         e.preventDefault();
         zone.classList.add('dragover');
     });
-    
-    zone.addEventListener('dragleave', () => {
-        zone.classList.remove('dragover');
-    });
-    
+
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+
     zone.addEventListener('drop', (e) => {
         e.preventDefault();
         zone.classList.remove('dragover');
@@ -446,11 +549,9 @@ function setupUpdateFileUpload() {
             updateFileDisplay(files[0], 'update');
         }
     });
-    
+
     input.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            updateFileDisplay(e.target.files[0], 'update');
-        }
+        if (e.target.files.length > 0) updateFileDisplay(e.target.files[0], 'update');
     });
 }
 
@@ -459,15 +560,26 @@ function updateFileDisplay(file, type) {
     const placeholder = document.getElementById(type === 'upload' ? 'uploadPlaceholder' : 'updateUploadPlaceholder');
     const fileInfo = document.getElementById(type === 'upload' ? 'uploadFileInfo' : 'updateUploadFileInfo');
     const fileName = document.getElementById(type === 'upload' ? 'uploadFileName' : 'updateUploadFileName');
-    
+
     zone.classList.add('has-file');
     placeholder.classList.add('hidden');
     fileInfo.classList.remove('hidden');
     fileName.textContent = file.name;
 }
 
-// 显示上传弹窗
+function resetFileDisplay(type) {
+    const zone = document.getElementById(type === 'upload' ? 'uploadZone' : 'updateUploadZone');
+    const placeholder = document.getElementById(type === 'upload' ? 'uploadPlaceholder' : 'updateUploadPlaceholder');
+    const fileInfo = document.getElementById(type === 'upload' ? 'uploadFileInfo' : 'updateUploadFileInfo');
+
+    zone.classList.remove('has-file');
+    placeholder.classList.remove('hidden');
+    fileInfo.classList.add('hidden');
+}
+
 function showUploadModal() {
+    uploadSelectedTags = [];
+    renderProjectFormTags('upload');
     document.getElementById('uploadModal').classList.remove('hidden');
 }
 
@@ -475,19 +587,9 @@ function closeUploadModal() {
     document.getElementById('uploadModal').classList.add('hidden');
     document.getElementById('uploadForm').reset();
     resetFileDisplay('upload');
+    hideTagInput('upload');
 }
 
-function resetFileDisplay(type) {
-    const zone = document.getElementById(type === 'upload' ? 'uploadZone' : 'updateUploadZone');
-    const placeholder = document.getElementById(type === 'upload' ? 'uploadPlaceholder' : 'updateUploadPlaceholder');
-    const fileInfo = document.getElementById(type === 'upload' ? 'uploadFileInfo' : 'updateUploadFileInfo');
-    
-    zone.classList.remove('has-file');
-    placeholder.classList.remove('hidden');
-    fileInfo.classList.add('hidden');
-}
-
-// 显示更新原型弹窗
 function showUpdateModal(objectId, projectName) {
     document.getElementById('updateProjectId').value = objectId;
     document.getElementById('updateProjectName').value = projectName;
@@ -500,31 +602,37 @@ function closeUpdateModal() {
     resetFileDisplay('update');
 }
 
-// 显示编辑弹窗
-function showEditModal(objectId, projectName, isPublic, viewPassword, remark) {
-    document.getElementById('editProjectId').value = objectId;
-    document.getElementById('editProjectName').value = projectName;
-    // 密码访问：非公开即使用密码
-    const usePassword = !isPublic;
+function showEditModal(project) {
+    document.getElementById('editProjectId').value = project.object_id;
+    document.getElementById('editProjectName').value = project.name;
+    const usePassword = !project.is_public;
     document.getElementById('editUsePassword').checked = usePassword;
-    document.getElementById('editViewPassword').value = viewPassword || '';
-    document.getElementById('editRemark').value = remark || '';
-    
-    if (usePassword) {
-        document.getElementById('editPasswordSection').classList.remove('hidden');
-    } else {
-        document.getElementById('editPasswordSection').classList.add('hidden');
-    }
-    
+    document.getElementById('editViewPassword').value = project.view_password || '';
+    document.getElementById('editRemark').value = project.remark || '';
+    document.getElementById('editPasswordSection').classList.toggle('hidden', !usePassword);
+
+    editSelectedTags = (project.tags || []).map(tag => ({ ...tag, pending: false }));
+    renderProjectFormTags('edit');
+    hideTagInput('edit');
+
     document.getElementById('editModal').classList.remove('hidden');
+}
+
+function showEditModalById(objectId) {
+    const project = projectsData.find(item => item.object_id === objectId);
+    if (!project) {
+        showToast('项目数据不存在，请刷新后重试', 'error');
+        return;
+    }
+    showEditModal(project);
 }
 
 function closeEditModal() {
     document.getElementById('editModal').classList.add('hidden');
     document.getElementById('editForm').reset();
+    hideTagInput('edit');
 }
 
-// 显示删除确认弹窗
 function showDeleteModal(objectId, projectName) {
     document.getElementById('deleteProjectId').value = objectId;
     document.getElementById('deleteProjectName').textContent = projectName;
@@ -535,28 +643,34 @@ function closeDeleteModal() {
     document.getElementById('deleteModal').classList.add('hidden');
 }
 
-// 显示更改作者弹窗
+function showRemarkModal(remark) {
+    document.getElementById('remarkContent').textContent = remark;
+    document.getElementById('remarkModal').classList.remove('hidden');
+}
+
+function closeRemarkModal() {
+    document.getElementById('remarkModal').classList.add('hidden');
+}
+
 async function showChangeAuthorModal(objectId, projectName) {
     document.getElementById('changeAuthorProjectId').value = objectId;
     document.getElementById('changeAuthorProjectName').value = projectName;
-    
-    // 加载用户列表
+
     try {
         const response = await fetch('/api/users/options');
         const users = await response.json();
         const menu = document.getElementById('newAuthorSelect_menu');
         if (menu) {
-            menu.innerHTML = '<div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors" data-value="" onclick="selectNewAuthorOption(\'\', \'请选择新作者\')">请选择新作者</div>' + 
+            menu.innerHTML = '<div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors" data-value="" onclick="selectNewAuthorOption(\'\', \'请选择新作者\')">请选择新作者</div>' +
                 users.map(u => `<div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors" data-value="${u.id}" onclick="selectNewAuthorOption(${u.id}, '${escapeHtml(u.name)} (${u.employee_id})')">${escapeHtml(u.name)} (${u.employee_id})</div>`).join('');
         }
     } catch (error) {
         showToast('加载用户列表失败', 'error');
     }
-    
+
     document.getElementById('changeAuthorModal').classList.remove('hidden');
 }
 
-// 选择新作者选项
 function selectNewAuthorOption(value, label) {
     selectDropdownOption('newAuthorSelect', value, label);
 }
@@ -567,154 +681,346 @@ function closeChangeAuthorModal() {
     setDropdownValue('newAuthorSelect', '');
 }
 
-// 生成随机密码（6位数字+字母）
 function generatePassword() {
     const chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
     let password = '';
-    for (let i = 0; i < 6; i++) {
-        password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+    for (let i = 0; i < 6; i++) password += chars.charAt(Math.floor(Math.random() * chars.length));
     document.getElementById('viewPassword').value = password;
 }
 
 function generateEditPassword() {
     const chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
     let password = '';
-    for (let i = 0; i < 6; i++) {
-        password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+    for (let i = 0; i < 6; i++) password += chars.charAt(Math.floor(Math.random() * chars.length));
     document.getElementById('editViewPassword').value = password;
 }
 
-// 复制项目链接
 function copyProjectLink(url) {
-    navigator.clipboard.writeText(url).then(() => {
-        showToast('链接已复制到剪贴板', 'success');
-    }).catch(() => {
-        showToast('复制失败', 'error');
-    });
+    navigator.clipboard.writeText(url).then(() => showToast('链接已复制到剪贴板', 'success')).catch(() => showToast('复制失败', 'error'));
 }
 
-// 查看项目
 function viewProject(objectId) {
     window.open(`/projects/${objectId}/`, '_blank');
 }
 
-// 事件监听 - 密码访问
-document.getElementById('usePassword').addEventListener('change', (e) => {
-    document.getElementById('passwordSection').classList.toggle('hidden', !e.target.checked);
-});
+function currentFormTags(type) {
+    return type === 'upload' ? uploadSelectedTags : editSelectedTags;
+}
 
-document.getElementById('editUsePassword').addEventListener('change', (e) => {
-    document.getElementById('editPasswordSection').classList.toggle('hidden', !e.target.checked);
-});
+function setCurrentFormTags(type, tags) {
+    if (type === 'upload') uploadSelectedTags = tags;
+    else editSelectedTags = tags;
+}
 
-// 上传表单提交
-document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const usePassword = document.getElementById('usePassword').checked;
-    const formData = new FormData();
-    formData.append('file', document.getElementById('projectFile').files[0]);
-    formData.append('name', document.getElementById('projectName').value);
-    formData.append('is_public', !usePassword); // 使用密码则不公开
-    formData.append('remark', document.getElementById('remark').value);
-    
-    if (usePassword) {
-        formData.append('view_password', document.getElementById('viewPassword').value);
-    }
-    
-    try {
-        const response = await fetch('/api/projects/upload', {
-            method: 'POST',
-            body: formData
+function renderProjectFormTags(type) {
+    const chipsEl = document.getElementById(`${type}TagChips`);
+    const tags = currentFormTags(type);
+    chipsEl.innerHTML = tags.map((tag, idx) => {
+        const pendingLabel = tag.pending ? '（待创建）' : '';
+        return tagChipHtml({ ...tag, name: `${tag.name}${pendingLabel}` }, {
+            removable: true,
+            removeFn: `removeFormTag('${type}', ${idx})`
         });
-        
-        if (response.ok) {
-            closeUploadModal();
-            loadProjects();
-            showToast('上传成功', 'success');
-        } else {
-            const data = await response.json();
-            showToast(data.detail || '上传失败', 'error');
-        }
-    } catch (error) {
-        showToast('网络错误', 'error');
-    }
-});
+    }).join('');
+}
 
-// 更新原型表单提交
-document.getElementById('updateForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const objectId = document.getElementById('updateProjectId').value;
-    const formData = new FormData();
-    formData.append('file', document.getElementById('updateProjectFile').files[0]);
-    
-    try {
-        const response = await fetch(`/api/projects/${objectId}/update-file`, {
-            method: 'POST',
-            body: formData
+function removeFormTag(type, idx) {
+    const tags = currentFormTags(type);
+    tags.splice(idx, 1);
+    setCurrentFormTags(type, tags);
+    renderProjectFormTags(type);
+}
+
+function showTagInput(type) {
+    document.getElementById(`${type}TagInputWrap`).classList.remove('hidden');
+    const input = document.getElementById(`${type}TagInput`);
+    input.value = '';
+    renderTagSearchResults(type);
+    input.focus();
+}
+
+function hideTagInput(type) {
+    document.getElementById(`${type}TagInputWrap`).classList.add('hidden');
+    const input = document.getElementById(`${type}TagInput`);
+    if (input) input.value = '';
+    document.getElementById(`${type}TagResults`).classList.add('hidden');
+}
+
+function addFormTag(type, tag) {
+    const tags = currentFormTags(type);
+    if (tags.find(item => item.name.toLowerCase() === tag.name.toLowerCase())) {
+        hideTagInput(type);
+        return;
+    }
+    tags.push(tag);
+    setCurrentFormTags(type, tags);
+    renderProjectFormTags(type);
+    hideTagInput(type);
+}
+
+function renderTagSearchResults(type) {
+    const input = document.getElementById(`${type}TagInput`);
+    const panel = document.getElementById(`${type}TagResults`);
+    const keyword = normalizeTagName(input.value).toLowerCase();
+
+    if (!keyword) {
+        panel.classList.add('hidden');
+        panel.innerHTML = '';
+        return;
+    }
+
+    const matches = allTags.filter(tag => tag.name.toLowerCase().includes(keyword));
+    panel.classList.remove('hidden');
+
+    if (!matches.length) {
+        panel.innerHTML = '<div class="px-3 py-2 text-sm text-gray-400">未找到匹配标签</div>';
+        return;
+    }
+
+    panel.innerHTML = matches.map(tag => `
+        <button type="button" onclick='addFormTag("${type}", ${JSON.stringify({ id: 0 })})' class="w-full px-3 py-2 text-left hover:bg-gray-50">${tagChipHtml(tag, { compact: true })}</button>
+    `).join('');
+
+    const buttons = panel.querySelectorAll('button');
+    buttons.forEach((btn, idx) => {
+        btn.onclick = () => addFormTag(type, { ...matches[idx], pending: false });
+    });
+}
+
+function setupTagInputEvents(type) {
+    const input = document.getElementById(`${type}TagInput`);
+    input.addEventListener('input', () => renderTagSearchResults(type));
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            hideTagInput(type);
+            return;
+        }
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const name = normalizeTagName(input.value);
+        if (!name) {
+            hideTagInput(type);
+            return;
+        }
+        if (name.length > 16) {
+            showToast('标签名称不可超过16个字符', 'error');
+            return;
+        }
+        const matched = getTagByName(name);
+        if (matched) {
+            addFormTag(type, { ...matched, pending: false });
+            return;
+        }
+        addFormTag(type, { name, emoji: '', color: '#D3D3D3', pending: true });
+    });
+}
+
+function showTagManagerModal() {
+    document.getElementById('tagManagerModal').classList.remove('hidden');
+    closeTagFormPopup();
+    renderManageTagLists();
+}
+
+function closeTagManagerModal() {
+    document.getElementById('tagManagerModal').classList.add('hidden');
+    manageTagSearch = '';
+    const searchInput = document.getElementById('manageTagSearchInput');
+    if (searchInput) searchInput.value = '';
+    closeTagFormPopup();
+    renderManageTagLists();
+}
+
+function manageTagRow(tag, isCommon) {
+    const canEdit = !!tag.can_edit;
+    const moveBtn = isCommon
+        ? `<button onclick="removeCommonTag(${tag.id})" class="h-7 w-7 rounded hover:bg-gray-100 text-gray-600" title="取消常用">
+                <svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+           </button>`
+        : `<button onclick="addCommonTag(${tag.id})" class="h-7 w-7 rounded hover:bg-gray-100 text-gray-600" title="设为常用">
+                <svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+           </button>`;
+
+    const editBtn = canEdit
+        ? `<button onclick="openEditTagPopup(${tag.id}, this)" class="h-7 w-7 rounded hover:bg-gray-100 text-gray-600" title="编辑">
+                <svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                </svg>
+           </button>`
+        : '';
+
+    return `
+        <div class="border border-gray-200 rounded-lg p-3 bg-white">
+            <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0 flex items-center gap-1.5 text-sm text-gray-800">
+                    <span class="w-2.5 h-2.5 rounded-full border border-black/10 flex-shrink-0" style="background:${tag.color || '#D3D3D3'};"></span>
+                    ${tag.emoji ? `<span>${escapeHtml(tag.emoji)}</span>` : ''}
+                    <span class="truncate">${escapeHtml(tag.name)}</span>
+                </div>
+                <div class="flex items-center gap-2">${moveBtn}${editBtn}</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderTagFormColorOptions() {
+    const container = document.getElementById('tagFormColorOptions');
+    if (!container) return;
+    container.innerHTML = TAG_COLORS.map(item => {
+        const active = item.base.toUpperCase() === (addTagColor || '').toUpperCase();
+        return `<button type="button" data-color="${item.base}" class="w-6 h-6 rounded-full border-2 ${active ? 'border-black ring-2 ring-orange-500 ring-offset-1' : 'border-transparent'}" style="background:${item.base}"></button>`;
+    }).join('');
+    container.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            addTagColor = btn.dataset.color;
+            renderTagFormColorOptions();
         });
-        
-        if (response.ok) {
-            closeUpdateModal();
-            loadProjects();
-            showToast('更新成功', 'success');
-        } else {
-            const data = await response.json();
-            showToast(data.detail || '更新失败', 'error');
-        }
-    } catch (error) {
-        showToast('网络错误', 'error');
-    }
-});
+    });
+}
 
-// 修改信息表单提交
-document.getElementById('editForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const objectId = document.getElementById('editProjectId').value;
-    const usePassword = document.getElementById('editUsePassword').checked;
-    const data = {
-        name: document.getElementById('editProjectName').value,
-        is_public: !usePassword, // 使用密码则不公开
-        remark: document.getElementById('editRemark').value
-    };
-    
-    if (usePassword) {
-        data.view_password = document.getElementById('editViewPassword').value;
-    }
-    
-    try {
-        const response = await fetch(`/api/projects/${objectId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        
-        if (response.ok) {
-            closeEditModal();
-            loadProjects();
-            showToast('修改成功', 'success');
-        } else {
-            const resData = await response.json();
-            showToast(resData.detail || '修改失败', 'error');
-        }
-    } catch (error) {
-        showToast('网络错误', 'error');
-    }
-});
+function renderManageTagLists() {
+    const commonEl = document.getElementById('commonTagsManageList');
+    const allEl = document.getElementById('allTagsManageList');
+    const commonIds = new Set(commonTags.map(t => t.id));
+    const filteredAll = allTags
+        .filter(tag => !commonIds.has(tag.id))
+        .filter(tag => !manageTagSearch || tag.name.toLowerCase().includes(manageTagSearch.toLowerCase()));
 
-// 确认删除
+    commonEl.innerHTML = commonTags.length ? commonTags.map(tag => manageTagRow(tag, true)).join('') : '<div class="text-sm text-gray-400">暂无常用标签</div>';
+    allEl.innerHTML = filteredAll.length ? filteredAll.map(tag => manageTagRow(tag, false)).join('') : '<div class="text-sm text-gray-400">暂无标签</div>';
+}
+
+async function addCommonTag(tagId) {
+    const response = await fetch(`/api/tags/common/${tagId}`, { method: 'POST' });
+    if (!response.ok) {
+        showToast('加入常用失败', 'error');
+        return;
+    }
+    await refreshTagsData();
+}
+
+async function removeCommonTag(tagId) {
+    const response = await fetch(`/api/tags/common/${tagId}`, { method: 'DELETE' });
+    if (!response.ok) {
+        showToast('移除常用失败', 'error');
+        return;
+    }
+    if (String(selectedTagFilter) === String(tagId)) {
+        selectedTagFilter = '';
+        selectDropdownOption('tagFilter', '', '全部标签');
+        loadProjects(1);
+    }
+    await refreshTagsData();
+}
+
+function openAddTagPopup() {
+    tagFormMode = 'create';
+    tagFormEditingId = null;
+    addTagColor = '#D3D3D3';
+    document.getElementById('tagFormTitle').textContent = '添加标签';
+    document.getElementById('tagFormSubmitBtn').textContent = '添加';
+    document.getElementById('tagFormName').value = '';
+    document.getElementById('tagFormEmoji').value = '';
+    const popup = document.getElementById('tagFormPopup');
+    popup.classList.remove('hidden');
+    popup.style.right = '16px';
+    popup.style.bottom = '56px';
+    popup.style.left = 'auto';
+    popup.style.top = 'auto';
+    renderTagFormColorOptions();
+}
+
+function openEditTagPopup(tagId, triggerEl) {
+    const tag = allTags.find(item => item.id === tagId);
+    if (!tag) {
+        showToast('标签不存在', 'error');
+        return;
+    }
+    tagFormMode = 'edit';
+    tagFormEditingId = tagId;
+    addTagColor = tag.color || '#D3D3D3';
+    document.getElementById('tagFormTitle').textContent = '编辑标签';
+    document.getElementById('tagFormSubmitBtn').textContent = '保存';
+    document.getElementById('tagFormName').value = tag.name || '';
+    document.getElementById('tagFormEmoji').value = tag.emoji || '';
+    const popup = document.getElementById('tagFormPopup');
+    popup.classList.remove('hidden');
+    const panel = document.getElementById('tagManagerPanel');
+    if (panel && triggerEl) {
+        const panelRect = panel.getBoundingClientRect();
+        const triggerRect = triggerEl.getBoundingClientRect();
+        const popupWidth = 360;
+        const popupHeight = 230;
+        let left = triggerRect.right - panelRect.left - popupWidth;
+        let top = triggerRect.bottom - panelRect.top + 8;
+        if (left < 8) left = 8;
+        if (left + popupWidth > panelRect.width - 8) left = panelRect.width - popupWidth - 8;
+        if (top + popupHeight > panelRect.height - 8) {
+            top = triggerRect.top - panelRect.top - popupHeight - 8;
+        }
+        if (top < 8) top = 8;
+        popup.style.left = `${left}px`;
+        popup.style.top = `${top}px`;
+        popup.style.right = 'auto';
+        popup.style.bottom = 'auto';
+    }
+    renderTagFormColorOptions();
+}
+
+function closeTagFormPopup() {
+    document.getElementById('tagFormPopup').classList.add('hidden');
+    document.getElementById('tagFormName').value = '';
+    document.getElementById('tagFormEmoji').value = '';
+    tagFormMode = 'create';
+    tagFormEditingId = null;
+    addTagColor = '#D3D3D3';
+}
+
+function isTagFormPopupOpen() {
+    const popup = document.getElementById('tagFormPopup');
+    return popup && !popup.classList.contains('hidden');
+}
+
+async function submitTagForm() {
+    const mode = tagFormMode;
+    const name = normalizeTagName(document.getElementById('tagFormName').value);
+    const emoji = (document.getElementById('tagFormEmoji').value || '').trim();
+    if (!name) {
+        showToast('标签名称不能为空', 'error');
+        return;
+    }
+    if (name.length > 16) {
+        showToast('标签名称不可超过16个字符', 'error');
+        return;
+    }
+
+    const url = mode === 'edit' ? `/api/tags/${tagFormEditingId}` : '/api/tags';
+    const method = mode === 'edit' ? 'PUT' : 'POST';
+    const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, emoji, color: addTagColor })
+    });
+
+    if (!response.ok) {
+        const data = await response.json();
+        showToast(data.detail || (mode === 'edit' ? '编辑失败' : '添加失败'), 'error');
+        return;
+    }
+
+    closeTagFormPopup();
+    await refreshTagsData();
+    loadProjects(currentPage);
+    showToast(mode === 'edit' ? '编辑成功' : '添加成功', 'success');
+}
+
 async function confirmDelete() {
     const objectId = document.getElementById('deleteProjectId').value;
-    
     try {
-        const response = await fetch(`/api/projects/${objectId}`, {
-            method: 'DELETE'
-        });
-        
+        const response = await fetch(`/api/projects/${objectId}`, { method: 'DELETE' });
         if (response.ok) {
             closeDeleteModal();
             loadProjects();
@@ -728,20 +1034,116 @@ async function confirmDelete() {
     }
 }
 
-// 更改作者表单提交
+document.getElementById('usePassword').addEventListener('change', (e) => {
+    document.getElementById('passwordSection').classList.toggle('hidden', !e.target.checked);
+});
+
+document.getElementById('editUsePassword').addEventListener('change', (e) => {
+    document.getElementById('editPasswordSection').classList.toggle('hidden', !e.target.checked);
+});
+
+document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const usePassword = document.getElementById('usePassword').checked;
+    const formData = new FormData();
+    formData.append('file', document.getElementById('projectFile').files[0]);
+    formData.append('name', document.getElementById('projectName').value);
+    formData.append('is_public', !usePassword);
+    formData.append('remark', document.getElementById('remark').value);
+    formData.append('tags', JSON.stringify(uniqueTagNames(uploadSelectedTags)));
+
+    if (usePassword) {
+        formData.append('view_password', document.getElementById('viewPassword').value);
+    }
+
+    try {
+        const response = await fetch('/api/projects/upload', { method: 'POST', body: formData });
+        if (response.ok) {
+            closeUploadModal();
+            await refreshTagsData();
+            loadProjects();
+            showToast('上传成功', 'success');
+        } else {
+            const data = await response.json();
+            showToast(data.detail || '上传失败', 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+});
+
+document.getElementById('updateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const objectId = document.getElementById('updateProjectId').value;
+    const formData = new FormData();
+    formData.append('file', document.getElementById('updateProjectFile').files[0]);
+
+    try {
+        const response = await fetch(`/api/projects/${objectId}/update-file`, { method: 'POST', body: formData });
+        if (response.ok) {
+            closeUpdateModal();
+            loadProjects();
+            showToast('更新成功', 'success');
+        } else {
+            const data = await response.json();
+            showToast(data.detail || '更新失败', 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+});
+
+document.getElementById('editForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const objectId = document.getElementById('editProjectId').value;
+    const usePassword = document.getElementById('editUsePassword').checked;
+    const data = {
+        name: document.getElementById('editProjectName').value,
+        is_public: !usePassword,
+        remark: document.getElementById('editRemark').value,
+        tag_names: uniqueTagNames(editSelectedTags)
+    };
+
+    if (usePassword) {
+        data.view_password = document.getElementById('editViewPassword').value;
+    }
+
+    try {
+        const response = await fetch(`/api/projects/${objectId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            closeEditModal();
+            await refreshTagsData();
+            loadProjects();
+            showToast('修改成功', 'success');
+        } else {
+            const resData = await response.json();
+            showToast(resData.detail || '修改失败', 'error');
+        }
+    } catch (error) {
+        showToast('网络错误', 'error');
+    }
+});
+
 document.getElementById('changeAuthorForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     const objectId = document.getElementById('changeAuthorProjectId').value;
     const newAuthorId = document.getElementById('newAuthorSelect').value;
-    
+
     try {
         const response = await fetch(`/api/projects/${objectId}/change-author`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ new_author_id: parseInt(newAuthorId) })
+            body: JSON.stringify({ new_author_id: parseInt(newAuthorId, 10) })
         });
-        
+
         if (response.ok) {
             closeChangeAuthorModal();
             loadProjects();
@@ -755,7 +1157,39 @@ document.getElementById('changeAuthorForm').addEventListener('submit', async (e)
     }
 });
 
-// 初始化
-setupFileUpload();
-setupUpdateFileUpload();
-loadProjects();
+document.addEventListener('DOMContentLoaded', async () => {
+    if (currentView === 'list') {
+        document.getElementById('cardViewBtn')?.classList.remove('active');
+        document.getElementById('listViewBtn')?.classList.add('active');
+        document.getElementById('cardView')?.classList.add('hidden');
+        document.getElementById('listView')?.classList.remove('hidden');
+    }
+
+    document.getElementById('manageTagSearchInput').addEventListener('input', (e) => {
+        manageTagSearch = e.target.value;
+        renderManageTagLists();
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!isTagFormPopupOpen()) return;
+        const popup = document.getElementById('tagFormPopup');
+        const insidePopup = e.target.closest('#tagFormPopup');
+        const triggerBtn = e.target.closest('button[onclick*="openAddTagPopup"], button[onclick*="openEditTagPopup"]');
+        if (insidePopup || triggerBtn) return;
+        closeTagFormPopup();
+        e.preventDefault();
+        e.stopPropagation();
+    }, true);
+
+    setupTagInputEvents('upload');
+    setupTagInputEvents('edit');
+    setupFileUpload();
+    setupUpdateFileUpload();
+
+    await ensureCurrentUserReady();
+    await Promise.all([
+        loadAuthors(),
+        refreshTagsData()
+    ]);
+    await loadProjects();
+});

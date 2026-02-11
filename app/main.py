@@ -19,16 +19,15 @@ os.makedirs(static_dir, exist_ok=True)
 
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
-# # 挂载 templates/scripts 目录，用于模板中的脚本文件
-# app.mount("/templates/scripts", StaticFiles(directory=os.path.join(templates_dir, "scripts")), name="templates_scripts")
 templates = Jinja2Templates(directory=templates_dir)
 
 # 导入路由
-from app.routers import auth, users, projects
+from app.routers import auth, users, projects, tags
 
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(projects.router)
+app.include_router(tags.router)
 app.include_router(projects.page_router)  # 页面路由（无 /api 前缀）
 
 @app.get("/", response_class=HTMLResponse)

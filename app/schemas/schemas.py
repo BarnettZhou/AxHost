@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from typing import Optional, List
 
@@ -34,6 +34,36 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user: UserResponse
 
+
+# 标签相关
+class TagBase(BaseModel):
+    name: str
+    emoji: Optional[str] = None
+    color: str = "#D3D3D3"
+
+
+class TagCreate(TagBase):
+    pass
+
+
+class TagUpdate(BaseModel):
+    name: Optional[str] = None
+    emoji: Optional[str] = None
+    color: Optional[str] = None
+
+
+class TagResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    emoji: Optional[str] = None
+    color: str
+    creator_id: Optional[int] = None
+    created_at: datetime
+    can_edit: bool = False
+
+
 # 项目相关
 class ProjectBase(BaseModel):
     name: str
@@ -42,12 +72,14 @@ class ProjectCreate(ProjectBase):
     view_password: Optional[str] = None
     is_public: bool = False
     remark: Optional[str] = None
+    tag_names: List[str] = Field(default_factory=list)
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     view_password: Optional[str] = None
     is_public: Optional[bool] = None
     remark: Optional[str] = None
+    tag_names: Optional[List[str]] = None
 
 class ProjectResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -60,6 +92,7 @@ class ProjectResponse(BaseModel):
     view_password: Optional[str]
     is_public: bool
     remark: Optional[str] = None
+    tags: List[TagResponse] = []
     created_at: datetime
     updated_at: datetime
     can_access: bool = False

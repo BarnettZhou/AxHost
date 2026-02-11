@@ -1,10 +1,21 @@
 import secrets
 import string
-from typing import Optional
+from typing import Optional, List
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from app.models.models import User, Project, ProjectAccess
-from app.schemas.schemas import UserCreate, UserUpdate, ProjectCreate, ProjectUpdate
-from app.core.security import get_password_hash, verify_password
+from app.models.models import User, Project, ProjectAccess, Tag, ProjectTag, UserCommonTag
+from app.schemas.schemas import UserCreate, UserUpdate, ProjectCreate, ProjectUpdate, TagCreate, TagUpdate
+from app.core.security import get_password_hash
+
+TAG_ALLOWED_COLORS = {
+    "#D3D3D3",
+    "#B8E7F5",
+    "#FFFFE0",
+    "#90EE90",
+    "#FFDAB9",
+    "#DDA0DD",
+}
+TAG_DEFAULT_COLOR = "#D3D3D3"
 
 def generate_object_id() -> str:
     """生成唯一的 object_id"""
@@ -16,6 +27,37 @@ def generate_password(length: int = 6) -> str:
     """生成随机密码（数字+字母）"""
     alphabet = string.ascii_letters + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+
+def normalize_tag_name(name: str) -> str:
+    return (name or "").strip()
+
+
+def validate_tag_color(color: Optional[str]) -> str:
+    if not color:
+        return TAG_DEFAULT_COLOR
+    if color not in TAG_ALLOWED_COLORS:
+        raise ValueError("标签配色不在允许范围内")
+    return color
+
+
+def sanitize_tag_names(tag_names: Optional[List[str]]) -> List[str]:
+    if not tag_names:
+        return []
+    unique_names: List[str] = []
+    seen = set()
+    for raw_name in tag_names:
+        name = normalize_tag_name(raw_name)
+        if not name:
+            continue
+        if len(name) > 16:
+            raise ValueError(f"标签名称超过16个字符: {name}")
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_names.append(name)
+    return unique_names
 
 # 用户服务
 class UserService:
@@ -81,6 +123,9 @@ class ProjectService:
             remark=project_data.remark
         )
         db.add(db_project)
+        db.flush()
+        if project_data.tag_names:
+            TagService.replace_project_tags(db, db_project, project_data.tag_names, author_id)
         db.commit()
         db.refresh(db_project)
         return db_project
@@ -95,6 +140,8 @@ class ProjectService:
             project.is_public = project_data.is_public
         if project_data.remark is not None:
             project.remark = project_data.remark
+        if project_data.tag_names is not None:
+            TagService.replace_project_tags(db, project, project_data.tag_names, project.author_id)
         db.commit()
         db.refresh(project)
         return project
@@ -200,3 +247,110 @@ class ProjectService:
         db.commit()
         db.refresh(project)
         return project
+
+    @staticmethod
+    def get_tags(project: Project) -> List[Tag]:
+        return [item.tag for item in project.project_tags if item.tag]
+
+
+class TagService:
+    @staticmethod
+    def list_all(db: Session, search: str = ""):
+        query = db.query(Tag)
+        if search:
+            query = query.filter(Tag.name.ilike(f"%{search}%"))
+        return query.order_by(Tag.created_at.desc()).all()
+
+    @staticmethod
+    def get_by_name(db: Session, name: str) -> Optional[Tag]:
+        return db.query(Tag).filter(Tag.name == name).first()
+
+    @staticmethod
+    def get_by_id(db: Session, tag_id: int) -> Optional[Tag]:
+        return db.query(Tag).filter(Tag.id == tag_id).first()
+
+    @staticmethod
+    def create(db: Session, data: TagCreate, creator_id: int) -> Tag:
+        name = normalize_tag_name(data.name)
+        if not name:
+            raise ValueError("标签名称不能为空")
+        if len(name) > 16:
+            raise ValueError("标签名称不可超过16个字符")
+        color = validate_tag_color(data.color)
+        tag = Tag(
+            name=name,
+            emoji=(data.emoji or "").strip() or None,
+            color=color,
+            creator_id=creator_id
+        )
+        db.add(tag)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise ValueError("标签名称已存在")
+        db.refresh(tag)
+        return tag
+
+    @staticmethod
+    def update(db: Session, tag: Tag, data: TagUpdate) -> Tag:
+        if data.name is not None:
+            name = normalize_tag_name(data.name)
+            if not name:
+                raise ValueError("标签名称不能为空")
+            if len(name) > 16:
+                raise ValueError("标签名称不可超过16个字符")
+            tag.name = name
+        if data.emoji is not None:
+            tag.emoji = (data.emoji or "").strip() or None
+        if data.color is not None:
+            tag.color = validate_tag_color(data.color)
+
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise ValueError("标签名称已存在")
+        db.refresh(tag)
+        return tag
+
+    @staticmethod
+    def get_or_create_by_name(db: Session, name: str, creator_id: int) -> Tag:
+        normalized = normalize_tag_name(name)
+        if not normalized:
+            raise ValueError("标签名称不能为空")
+        if len(normalized) > 16:
+            raise ValueError("标签名称不可超过16个字符")
+        existing = TagService.get_by_name(db, normalized)
+        if existing:
+            return existing
+        tag = Tag(name=normalized, color=TAG_DEFAULT_COLOR, creator_id=creator_id)
+        db.add(tag)
+        db.flush()
+        return tag
+
+    @staticmethod
+    def replace_project_tags(db: Session, project: Project, tag_names: List[str], creator_id: int):
+        names = sanitize_tag_names(tag_names)
+        db.query(ProjectTag).filter(ProjectTag.project_id == project.id).delete()
+        for name in names:
+            tag = TagService.get_or_create_by_name(db, name, creator_id)
+            db.add(ProjectTag(project_id=project.id, tag_id=tag.id))
+
+    @staticmethod
+    def list_common_tags(db: Session, user_id: int) -> List[Tag]:
+        rows = db.query(UserCommonTag).filter(UserCommonTag.user_id == user_id).order_by(UserCommonTag.created_at.asc()).all()
+        return [row.tag for row in rows if row.tag]
+
+    @staticmethod
+    def add_common_tag(db: Session, user_id: int, tag_id: int):
+        exists = db.query(UserCommonTag).filter(UserCommonTag.user_id == user_id, UserCommonTag.tag_id == tag_id).first()
+        if exists:
+            return
+        db.add(UserCommonTag(user_id=user_id, tag_id=tag_id))
+        db.commit()
+
+    @staticmethod
+    def remove_common_tag(db: Session, user_id: int, tag_id: int):
+        db.query(UserCommonTag).filter(UserCommonTag.user_id == user_id, UserCommonTag.tag_id == tag_id).delete()
+        db.commit()
