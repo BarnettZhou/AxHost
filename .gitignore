@@ -64,6 +64,9 @@ design/
 # docs
 docs/
 
+# codex
+.codex/
+
 # Temporary files
 *.tmp
 *.temp
