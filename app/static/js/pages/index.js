@@ -16,12 +16,15 @@ let uploadSelectedTags = [];
 let editSelectedTags = [];
 
 const TAG_COLORS = [
-    { base: '#D3D3D3', highlight: '#444952' },
-    { base: '#B8E7F5', highlight: '#0078D4' },
-    { base: '#FFFFE0', highlight: '#FFAC00' },
-    { base: '#90EE90', highlight: '#008000' },
-    { base: '#FFDAB9', highlight: '#FF4500' },
-    { base: '#DDA0DD', highlight: '#800080' }
+    { base: '#ffffff', highlight: '#80858f' },
+    { base: '#d5e4fe', highlight: '#2a71f1' },
+    { base: '#d6f1ff', highlight: '#08a1f2' },
+    { base: '#d3f3e2', highlight: '#45af77' },
+    { base: '#fedbdb', highlight: '#de3c36' },
+    { base: '#ffecdb', highlight: '#f88825' },
+    { base: '#fff5cc', highlight: '#f5c400' },
+    { base: '#fbdbff', highlight: '#9a38d7' },
+    { base: '#ffdbea', highlight: '#dd4097' },
 ];
 
 function colorHighlight(baseColor) {

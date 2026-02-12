@@ -8,14 +8,17 @@ from app.schemas.schemas import UserCreate, UserUpdate, ProjectCreate, ProjectUp
 from app.core.security import get_password_hash
 
 TAG_ALLOWED_COLORS = {
-    "#D3D3D3",
-    "#B8E7F5",
-    "#FFFFE0",
-    "#90EE90",
-    "#FFDAB9",
-    "#DDA0DD",
+    "#ffffff",
+    "#d5e4fe",
+    "#d6f1ff",
+    "#d3f3e2",
+    "#fedbdb",
+    "#ffecdb",
+    "#fff5cc",
+    "#fbdbff",
+    "#ffdbea",
 }
-TAG_DEFAULT_COLOR = "#D3D3D3"
+TAG_DEFAULT_COLOR = "#ffffff"
 
 def generate_object_id() -> str:
     """生成唯一的 object_id"""
