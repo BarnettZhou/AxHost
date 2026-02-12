@@ -583,12 +583,58 @@ function resetFileDisplay(type) {
 function showUploadModal() {
     uploadSelectedTags = [];
     renderProjectFormTags('upload');
+    
+    // 清理可能残留的上传表单遮罩层和禁用状态
+    const uploadForm = document.getElementById('uploadForm');
+    if (uploadForm) {
+        const overlay = document.getElementById('uploadForm_overlay');
+        if (overlay) overlay.remove();
+        
+        uploadForm.querySelectorAll('button').forEach(el => {
+            el.disabled = false;
+            delete el.dataset.originalDisabled;
+        });
+        uploadForm.querySelectorAll('input, textarea, select').forEach(el => {
+            el.disabled = false;
+            delete el.dataset.originalDisabled;
+        });
+        
+        const submitBtn = uploadForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '上传';
+        }
+    }
+    
     document.getElementById('uploadModal').classList.remove('hidden');
 }
 
 function closeUploadModal() {
     document.getElementById('uploadModal').classList.add('hidden');
-    document.getElementById('uploadForm').reset();
+    
+    // 清理上传表单的遮罩层和禁用状态
+    const uploadForm = document.getElementById('uploadForm');
+    if (uploadForm) {
+        const overlay = document.getElementById('uploadForm_overlay');
+        if (overlay) overlay.remove();
+        
+        uploadForm.querySelectorAll('button').forEach(el => {
+            el.disabled = false;
+            delete el.dataset.originalDisabled;
+        });
+        uploadForm.querySelectorAll('input, textarea, select').forEach(el => {
+            el.disabled = false;
+            delete el.dataset.originalDisabled;
+        });
+        
+        const submitBtn = uploadForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '上传';
+        }
+    }
+    
+    uploadForm.reset();
     resetFileDisplay('upload');
     hideTagInput('upload');
 }
