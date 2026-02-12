@@ -211,13 +211,18 @@ function getTagByName(name) {
     return allTags.find(tag => tag.name.toLowerCase() === key);
 }
 
-function renderTagFilterOptions() {
-    const menu = document.getElementById('tagFilter_menu');
-    if (!menu) return;
-    const options = allTags.map(tag => `
+function renderTagFilterOptions(search = '') {
+    const container = document.getElementById('tagFilterOptions');
+    if (!container) return;
+    
+    const keyword = search.toLowerCase().trim();
+    const filteredTags = keyword ? allTags.filter(tag => tag.name.toLowerCase().includes(keyword)) : allTags;
+    
+    const options = filteredTags.map(tag => `
         <div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors" data-value="${tag.id}" onclick="selectTagFilter('${tag.id}', '${escapeHtml(tag.name)}')">${escapeHtml(tag.emoji || '')} ${escapeHtml(tag.name)}</div>
     `).join('');
-    menu.innerHTML = '<div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors bg-orange-50 text-orange-700" data-value="" onclick="selectTagFilter(\'\', \'全部标签\')">全部标签</div>' + options;
+    
+    container.innerHTML = '<div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors bg-orange-50 text-orange-700" data-value="" onclick="selectTagFilter(\'\', \'全部标签\')">全部标签</div>' + (options || '<div class="px-4 py-2 text-sm text-gray-400">未找到匹配标签</div>');
 }
 
 function renderQuickTagFilters() {
@@ -423,24 +428,22 @@ function renderListView(projects) {
         const isAdmin = me && me.role === 'admin';
         const projectUrl = `${window.location.origin}/projects/${project.object_id}/`;
         const hasRemark = project.remark && project.remark.trim();
-        const shortRemark = hasRemark ? project.remark.replace(/\n/g, ' ').substring(0, 20) : '';
-        const needMore = hasRemark && project.remark.length > 20;
 
         return `
-            <div class="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-gray-50 transition-colors">
-                <div class="col-span-2">
+            <div class="flex gap-4 px-6 py-4 items-center hover:bg-gray-50 transition-colors">
+                <div style="width: 22%">
                     <div class="font-medium text-gray-900 cursor-pointer hover:text-orange-600 truncate" onclick="viewProject('${project.object_id}')">${escapeHtml(project.name)}</div>
                 </div>
-                <div class="col-span-2">
+                <div style="width: 16%">
                     ${renderListTags(project.tags || [])}
                 </div>
-                <div class="col-span-1 text-sm text-gray-500 truncate">${escapeHtml(project.author_name)}</div>
-                <div class="col-span-1">${project.is_public ? '<span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">公开</span>' : '<span class="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">私密</span>'}</div>
-                <div class="col-span-2 text-sm text-gray-500">${formatDisplayDate(project.updated_at)}</div>
-                <div class="col-span-2 text-sm">
-                    ${hasRemark ? `<div class="flex items-center gap-1"><span class="text-gray-600 truncate flex-1">${escapeHtml(shortRemark)}${needMore ? '...' : ''}</span>${needMore ? `<button onclick="showRemarkModal('${escapeHtml(project.remark)}')" class="text-orange-600 hover:text-orange-700 text-xs flex-shrink-0">更多</button>` : ''}</div>` : '<span class="text-gray-400">无备注</span>'}
+                <div class="text-sm text-gray-500 truncate" style="width: 12%">${escapeHtml(project.author_name)}</div>
+                <div style="width: 8%">${project.is_public ? '<span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">公开</span>' : '<span class="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">私密</span>'}</div>
+                <div class="text-sm text-gray-500" style="width: 20%">${formatDisplayDate(project.updated_at)}</div>
+                <div class="text-sm flex-1 overflow-hidden">
+                    ${hasRemark ? `<span class="text-gray-600 truncate block cursor-pointer hover:text-orange-600" onclick="showRemarkModal('${escapeHtml(project.remark)}')" title="点击查看完整备注">${escapeHtml(project.remark)}</span>` : '<span class="text-gray-400">无备注</span>'}
                 </div>
-                <div class="col-span-2 text-right">
+                <div class="text-right" style="width: 8%">
                     <div class="relative inline-block">
                         <button onclick="toggleDropdown(event, 'list-${project.object_id}')" class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
@@ -1314,6 +1317,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('manageTagSearchInput').addEventListener('input', (e) => {
         manageTagSearch = e.target.value;
         renderManageTagLists();
+    });
+
+    document.getElementById('tagFilterSearch')?.addEventListener('input', (e) => {
+        renderTagFilterOptions(e.target.value);
     });
 
     document.addEventListener('click', (e) => {
