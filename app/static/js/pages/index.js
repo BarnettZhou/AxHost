@@ -642,12 +642,58 @@ function closeUploadModal() {
 function showUpdateModal(objectId, projectName) {
     document.getElementById('updateProjectId').value = objectId;
     document.getElementById('updateProjectName').value = projectName;
+    
+    // 清理可能残留的更新表单遮罩层和禁用状态
+    const updateForm = document.getElementById('updateForm');
+    if (updateForm) {
+        const overlay = document.getElementById('updateForm_overlay');
+        if (overlay) overlay.remove();
+        
+        updateForm.querySelectorAll('button').forEach(el => {
+            el.disabled = false;
+            delete el.dataset.originalDisabled;
+        });
+        updateForm.querySelectorAll('input, textarea, select').forEach(el => {
+            el.disabled = false;
+            delete el.dataset.originalDisabled;
+        });
+        
+        const submitBtn = updateForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '确认更新';
+        }
+    }
+    
     document.getElementById('updateModal').classList.remove('hidden');
 }
 
 function closeUpdateModal() {
     document.getElementById('updateModal').classList.add('hidden');
-    document.getElementById('updateForm').reset();
+    
+    // 清理更新表单的遮罩层和禁用状态
+    const updateForm = document.getElementById('updateForm');
+    if (updateForm) {
+        const overlay = document.getElementById('updateForm_overlay');
+        if (overlay) overlay.remove();
+        
+        updateForm.querySelectorAll('button').forEach(el => {
+            el.disabled = false;
+            delete el.dataset.originalDisabled;
+        });
+        updateForm.querySelectorAll('input, textarea, select').forEach(el => {
+            el.disabled = false;
+            delete el.dataset.originalDisabled;
+        });
+        
+        const submitBtn = updateForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '确认更新';
+        }
+    }
+    
+    updateForm.reset();
     resetFileDisplay('update');
 }
 
