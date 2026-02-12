@@ -831,6 +831,7 @@ function removeFormTag(type, idx) {
 
 function showTagInput(type) {
     document.getElementById(`${type}TagInputWrap`).classList.remove('hidden');
+    document.getElementById(`${type}TagAddBtn`)?.classList.add('hidden');
     const input = document.getElementById(`${type}TagInput`);
     input.value = '';
     renderTagSearchResults(type);
@@ -839,6 +840,7 @@ function showTagInput(type) {
 
 function hideTagInput(type) {
     document.getElementById(`${type}TagInputWrap`).classList.add('hidden');
+    document.getElementById(`${type}TagAddBtn`)?.classList.remove('hidden');
     const input = document.getElementById(`${type}TagInput`);
     if (input) input.value = '';
     document.getElementById(`${type}TagResults`).classList.add('hidden');
@@ -1017,7 +1019,7 @@ async function removeCommonTag(tagId) {
 function openAddTagPopup() {
     tagFormMode = 'create';
     tagFormEditingId = null;
-    addTagColor = '#D3D3D3';
+    addTagColor = '#ffffff';
     document.getElementById('tagFormTitle').textContent = '添加标签';
     document.getElementById('tagFormSubmitBtn').textContent = '添加';
     document.getElementById('tagFormName').value = '';

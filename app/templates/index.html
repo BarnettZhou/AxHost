@@ -172,7 +172,7 @@
         <!-- 项目列表 - 列表视图 -->
         <div id="listView" class="hidden bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full">
             <!-- 表头 - 固定 -->
-            <div class="bg-gray-50 border-b border-gray-200 flex gap-4 px-6 py-4 flex-shrink-0">
+            <div class="bg-gray-50 border-b border-gray-200 flex gap-4 px-6 py-4 flex-shrink-0 overflow-y-scroll">
                 <div class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider" style="width: 22%">项目名称</div>
                 <div class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider" style="width: 16%">标签</div>
                 <div class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider" style="width: 12%">作者</div>
@@ -254,7 +254,7 @@
                         <input type="text" id="uploadTagInput" class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-transparent" placeholder="搜索或输入标签，回车添加">
                         <div id="uploadTagResults" class="absolute z-20 w-full mt-1 bg-white rounded-lg border border-gray-200 shadow-lg max-h-40 overflow-y-auto hidden"></div>
                     </div>
-                    <button type="button" onclick="showTagInput('upload')" class="h-8 w-8 rounded-full border border-gray-300 bg-white hover:border-orange-500 hover:text-orange-600 transition-colors flex items-center justify-center">+</button>
+                    <button type="button" id="uploadTagAddBtn" onclick="showTagInput('upload')" class="h-8 w-8 rounded-full border border-gray-300 bg-white hover:border-orange-500 hover:text-orange-600 transition-colors flex items-center justify-center">+</button>
                 </div>
             </div>
             <div>
@@ -340,7 +340,7 @@
                         <input type="text" id="editTagInput" class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-transparent" placeholder="搜索或输入标签，回车添加">
                         <div id="editTagResults" class="absolute z-20 w-full mt-1 bg-white rounded-lg border border-gray-200 shadow-lg max-h-40 overflow-y-auto hidden"></div>
                     </div>
-                    <button type="button" onclick="showTagInput('edit')" class="h-8 w-8 rounded-full border border-gray-300 bg-white hover:border-orange-500 hover:text-orange-600 transition-colors flex items-center justify-center">+</button>
+                    <button type="button" id="editTagAddBtn" onclick="showTagInput('edit')" class="h-8 w-8 rounded-full border border-gray-300 bg-white hover:border-orange-500 hover:text-orange-600 transition-colors flex items-center justify-center">+</button>
                 </div>
             </div>
             <div>
