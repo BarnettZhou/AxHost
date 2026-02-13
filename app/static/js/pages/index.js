@@ -794,7 +794,35 @@ function generateEditPassword() {
 }
 
 function copyProjectLink(url) {
-    navigator.clipboard.writeText(url).then(() => showToast('链接已复制到剪贴板', 'success')).catch(() => showToast('复制失败', 'error'));
+    // 兼容性方案：优先使用现代 API，降级使用传统方法
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => showToast('链接已复制到剪贴板', 'success')).catch(() => fallbackCopyText(url));
+    } else {
+        fallbackCopyText(url);
+    }
+}
+
+// 兼容性降级方案（支持 Windows Chrome HTTP 环境）
+function fallbackCopyText(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-999999px';
+    textarea.style.top = '-999999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+            showToast('链接已复制到剪贴板', 'success');
+        } else {
+            showToast('复制失败，请手动复制', 'error');
+        }
+    } catch (err) {
+        showToast('复制失败，请手动复制', 'error');
+    }
+    document.body.removeChild(textarea);
 }
 
 function viewProject(objectId) {
