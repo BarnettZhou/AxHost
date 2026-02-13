@@ -3,6 +3,7 @@ let currentView = localStorage.getItem('projectView') || 'card';
 let currentProjectType = 'my';
 let projectsData = [];
 let activeDropdown = null;
+let perPage = parseInt(localStorage.getItem('projectPerPage')) || 12;
 
 let allTags = [];
 let commonTags = [];
@@ -329,12 +330,123 @@ function switchProjectType(type) {
     loadProjects(1);
 }
 
+// 分页组件渲染
+function renderPagination(total, totalPages, currentPageNum) {
+    const pageEl = document.getElementById('pagination');
+    if (!pageEl) return;
+    
+    pageEl.dataset.total = total;
+    pageEl.dataset.totalPages = totalPages;
+    
+    const hasPrev = currentPageNum > 1;
+    const hasNext = currentPageNum < totalPages;
+    
+    const perPageOptions = [12, 24, 48];
+    const perPageOptionsHtml = perPageOptions.map(opt => 
+        `<div class="dropdown-option px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors ${opt === perPage ? 'bg-orange-50 text-orange-700' : ''}" data-value="${opt}" onclick="selectPerPageOption(${opt})">${opt}条/页</div>`
+    ).join('');
+    
+    pageEl.innerHTML = `
+        <span class="text-gray-500">共 ${total} 条数据</span>
+        
+        <div class="flex items-center gap-2">
+            <button onclick="loadProjects(${currentPageNum - 1})" 
+                class="h-8 w-8 flex items-center justify-center rounded-lg border ${hasPrev ? 'border-gray-300 hover:border-orange-500 hover:text-orange-600' : 'border-gray-200 text-gray-300 cursor-not-allowed'} transition-colors"
+                ${!hasPrev ? 'disabled' : ''}>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </button>
+            
+            <div class="flex items-center gap-1">
+                <span id="pageNumberDisplay" onclick="showPageInput(${currentPageNum}, ${totalPages})" 
+                    class="cursor-pointer hover:text-orange-600 font-medium min-w-[40px] text-center">
+                    ${currentPageNum}
+                </span>
+                <span class="text-gray-400">/ ${totalPages}</span>
+            </div>
+            
+            <button onclick="loadProjects(${currentPageNum + 1})" 
+                class="h-8 w-8 flex items-center justify-center rounded-lg border ${hasNext ? 'border-gray-300 hover:border-orange-500 hover:text-orange-600' : 'border-gray-200 text-gray-300 cursor-not-allowed'} transition-colors"
+                ${!hasNext ? 'disabled' : ''}>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <!-- 每页数量选择 - 自定义下拉菜单样式 -->
+        <div class="custom-dropdown relative w-[100px]" id="perPage_container">
+            <button type="button" 
+                    class="dropdown-trigger w-full h-8 px-3 rounded-lg border border-gray-300 bg-white text-left text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors flex items-center justify-between"
+                    onclick="toggleDropdownMenu('perPage')">
+                <span class="dropdown-text text-gray-700">${perPage}条/页</span>
+                <svg class="dropdown-arrow w-4 h-4 text-gray-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+            <input type="hidden" id="perPage" value="${perPage}">
+            <div class="dropdown-menu absolute z-50 w-full mb-1 bottom-full bg-white rounded-lg shadow-lg border border-gray-200 py-1 hidden" id="perPage_menu">
+                ${perPageOptionsHtml}
+            </div>
+        </div>
+    `;
+}
+
+// 显示页码输入框
+function showPageInput(currentPageNum, totalPages) {
+    const displayEl = document.getElementById('pageNumberDisplay');
+    if (!displayEl) return;
+    
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = 1;
+    input.max = totalPages;
+    input.value = currentPageNum;
+    input.className = 'w-12 h-7 px-1 text-center text-sm border border-orange-500 rounded focus:outline-none focus:ring-2 focus:ring-orange-500';
+    
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const page = parseInt(e.target.value, 10);
+            if (page >= 1 && page <= totalPages) {
+                loadProjects(page);
+            } else {
+                showToast(`请输入1-${totalPages}之间的页码`, 'error');
+            }
+        } else if (e.key === 'Escape') {
+            renderPagination(document.getElementById('pagination').dataset.total || 0, totalPages, currentPageNum);
+        }
+    });
+    
+    input.addEventListener('blur', () => {
+        const pageEl = document.getElementById('pagination');
+        renderPagination(pageEl?.dataset.total || 0, parseInt(pageEl?.dataset.totalPages || 1, 10), currentPageNum);
+    });
+    
+    displayEl.replaceWith(input);
+    input.focus();
+    input.select();
+}
+
+// 选择每页数量选项
+function selectPerPageOption(value) {
+    selectDropdownOption('perPage', value, `${value}条/页`);
+    changePerPage(value);
+}
+
+// 切换每页数量
+function changePerPage(newPerPage) {
+    perPage = parseInt(newPerPage, 10);
+    localStorage.setItem('projectPerPage', perPage);
+    loadProjects(1);
+}
+
 async function loadProjects(page = 1) {
     currentPage = page;
     const search = document.getElementById('searchInput').value;
     const authorId = document.getElementById('authorFilter')?.value || '';
 
-    let url = `/api/projects?page=${page}&per_page=12&search=${encodeURIComponent(search)}&project_type=${currentProjectType}`;
+    let url = `/api/projects?page=${page}&per_page=${perPage}&search=${encodeURIComponent(search)}&project_type=${currentProjectType}`;
     if (authorId && currentProjectType === 'collaborate') {
         url += `&author_id=${authorId}`;
     }
@@ -353,13 +465,8 @@ async function loadProjects(page = 1) {
             renderListView(projectsData);
         }
 
-        const totalPages = Math.ceil((data.total || 0) / (data.per_page || 1));
-        const pageEl = document.getElementById('pagination');
-        let pageHtml = '';
-        for (let i = 1; i <= totalPages; i++) {
-            pageHtml += `<button onclick="loadProjects(${i})" class="px-3 py-1 rounded ${i === page ? 'bg-orange-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}">${i}</button>`;
-        }
-        pageEl.innerHTML = pageHtml;
+        const totalPages = Math.ceil((data.total || 0) / (data.per_page || perPage));
+        renderPagination(data.total || 0, totalPages, page);
     } catch (error) {
         console.error('加载失败:', error);
         showToast('加载失败', 'error');
