@@ -9,19 +9,20 @@
         flex-shrink: 0;
     }
     
-    /* 卡片 hover 效果 */
+    /* 卡片 hover 效果 - 优化性能 */
     .card-hover {
-        transition: all 0.2s ease;
+        transition: box-shadow 0.2s ease;
     }
     .card-hover:hover {
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        border-color: #FF6600 !important;
+        outline: 1px solid #FF6600;
+        outline-offset: -1px;
     }
     
     /* 文件上传美化 */
     .file-upload-zone {
         border: 2px dashed #d1d5db;
-        transition: all 0.3s ease;
+        transition: border-color 0.3s ease, background-color 0.3s ease;
     }
     .file-upload-zone:hover, .file-upload-zone.dragover {
         border-color: #FF6600;
@@ -39,7 +40,7 @@
     
     /* 视图切换按钮 */
     .switch-btn {
-        transition: all 0.2s ease;
+        transition: background-color 0.2s ease, color 0.2s ease;
     }
     .switch-btn.active {
         background-color: #FF6600;
@@ -182,6 +183,17 @@
                 <div class="text-right text-xs font-semibold text-gray-500 uppercase tracking-wider" style="width: 8%">操作</div>
             </div>
             <!-- 列表内容 - 可滚动 -->
+            <style>
+                /* 隐藏列表视图表头的滚动条但保持可滚动能力 */
+                #listView .overflow-y-scroll {
+                    overflow-y: hidden !important;
+                    scrollbar-width: none;
+                    -ms-overflow-style: none;
+                }
+                #listView .overflow-y-scroll::-webkit-scrollbar {
+                    display: none;
+                }
+            </style>
             <div id="listViewBody" class="divide-y divide-gray-200 overflow-y-auto flex-1">
                 <!-- 动态加载 -->
             </div>
@@ -203,7 +215,7 @@
 </main>
 
 <!-- 上传弹窗 -->
-<div id="uploadModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+<div id="uploadModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg mx-4 modal-enter">
         <h3 class="text-xl font-bold mb-6">新增项目</h3>
         <form id="uploadForm" class="space-y-6">
@@ -270,7 +282,7 @@
 </div>
 
 <!-- 更新原型模态框 -->
-<div id="updateModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+<div id="updateModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg mx-4 modal-enter">
         <h3 class="text-xl font-bold mb-4">更新原型</h3>
         <form id="updateForm" class="space-y-4">
@@ -308,7 +320,7 @@
 </div>
 
 <!-- 编辑弹窗 -->
-<div id="editModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+<div id="editModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg mx-4 modal-enter">
         <h3 class="text-xl font-bold mb-6">编辑项目</h3>
         <form id="editForm" class="space-y-6">
@@ -356,7 +368,7 @@
 </div>
 
 <!-- 备注详情弹窗 -->
-<div id="remarkModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+<div id="remarkModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4 modal-enter">
         <div class="flex items-center justify-between mb-4">
             <h3 class="text-lg font-bold">项目备注</h3>
@@ -373,7 +385,7 @@
 </div>
 
 <!-- 删除确认弹窗 -->
-<div id="deleteModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+<div id="deleteModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 modal-enter">
         <div class="text-center">
             <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -393,7 +405,7 @@
 </div>
 
 <!-- 更改作者模态框 -->
-<div id="changeAuthorModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+<div id="changeAuthorModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg mx-4 modal-enter">
         <h3 class="text-xl font-bold mb-4">更改作者</h3>
         <form id="changeAuthorForm" class="space-y-4">
@@ -428,7 +440,7 @@
 </div>
 
 <!-- 项目标签详情弹窗 -->
-<div id="projectTagsModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+<div id="projectTagsModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4 modal-enter">
         <div class="flex items-center justify-between mb-4">
             <h3 class="text-lg font-bold">项目标签</h3>
@@ -443,7 +455,7 @@
 </div>
 
 <!-- 标签管理弹窗 -->
-<div id="tagManagerModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+<div id="tagManagerModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-3xl mx-4 modal-enter">
         <div class="flex items-center justify-between mb-4">
             <h3 class="text-xl font-bold">标签管理</h3>
@@ -487,6 +499,6 @@
 </div>
 
 <!-- 页面脚本 -->
-<script src="/static/js/components/dropdown.js"></script>
-<script src="/static/js/pages/index.js"></script>
+<script src="/static/js/components/dropdown.js?v=202602131751"></script>
+<script src="/static/js/pages/index.js?v=202602131755"></script>
 {% endblock %}

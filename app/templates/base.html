@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}AxHost{% endblock %}</title>
-    <script src="/static/js/tailwindcss.js"></script>
-    <link href="/static/css/inter-font.css" rel="stylesheet">
+    <script src="/static/js/tailwindcss.js?v=202602131022"></script>
+    <link href="/static/css/inter-font.css?v=202602131022" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -90,12 +90,13 @@
         }
         
 
-        /* 下拉菜单动画 */
+        /* 下拉菜单动画 - 优化性能：只过渡可加速的属性 */
         .dropdown-menu {
             opacity: 0;
             visibility: hidden;
             transform: translateY(-10px);
-            transition: all 0.2s ease;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            will-change: opacity, transform;
         }
         .dropdown-menu.show {
             opacity: 1;
@@ -106,7 +107,7 @@
         /* 文件上传美化 */
         .file-upload-zone {
             border: 2px dashed #d1d5db;
-            transition: all 0.3s ease;
+            transition: border-color 0.3s ease, background-color 0.3s ease;
         }
         .file-upload-zone:hover, .file-upload-zone.dragover {
             border-color: #FF6600;
@@ -132,7 +133,7 @@
             border: 1px solid #e5e7eb;
         }
         .switch-btn {
-            transition: all 0.2s ease;
+            transition: background-color 0.2s ease, color 0.2s ease;
         }
         .switch-btn.active {
             background-color: #FF6600;

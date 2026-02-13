@@ -373,7 +373,8 @@ function renderCardView(projects) {
         return;
     }
 
-    listEl.innerHTML = projects.map(project => {
+    // 使用 requestAnimationFrame 批量渲染，避免阻塞主线程
+    const html = projects.map(project => {
         const me = getCurrentUser();
         const canManage = me && (me.role === 'admin' || project.author_id === me.id);
         const isAdmin = me && me.role === 'admin';
@@ -383,7 +384,7 @@ function renderCardView(projects) {
         const needMore = hasRemark && project.remark.length > 48;
 
         return `
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 card-hover transition-all relative group flex flex-col">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 card-hover relative group flex flex-col">
                 <div class="flex items-start justify-between mb-2">
                     <div class="flex items-center gap-2 flex-1 min-w-0">
                         ${project.is_public ? '<span class="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full flex-shrink-0">公开</span>' : '<span class="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full flex-shrink-0">私密</span>'}
@@ -398,7 +399,7 @@ function renderCardView(projects) {
                             <button onclick="toggleDropdown(event, '${project.object_id}')" class="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"></path></svg>
                             </button>
-                            <div id="dropdown-${project.object_id}" class="dropdown-menu absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                            <div id="dropdown-${project.object_id}" class="dropdown-menu absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                                 ${renderProjectActionMenu(project, projectUrl, canManage, isAdmin)}
                             </div>
                         </div>
@@ -413,6 +414,8 @@ function renderCardView(projects) {
             </div>
         `;
     }).join('');
+    
+    listEl.innerHTML = html;
 }
 
 function renderListView(projects) {
@@ -422,7 +425,7 @@ function renderListView(projects) {
         return;
     }
 
-    tbody.innerHTML = projects.map(project => {
+    const html = projects.map(project => {
         const me = getCurrentUser();
         const canManage = me && (me.role === 'admin' || project.author_id === me.id);
         const isAdmin = me && me.role === 'admin';
@@ -430,7 +433,7 @@ function renderListView(projects) {
         const hasRemark = project.remark && project.remark.trim();
 
         return `
-            <div class="flex gap-4 px-6 py-4 items-center hover:bg-gray-50 transition-colors">
+            <div class="flex gap-4 px-6 py-4 items-center hover:bg-gray-50">
                 <div style="width: 22%">
                     <div class="font-medium text-gray-900 cursor-pointer hover:text-orange-600 truncate" onclick="viewProject('${project.object_id}')">${escapeHtml(project.name)}</div>
                 </div>
@@ -456,6 +459,8 @@ function renderListView(projects) {
             </div>
         `;
     }).join('');
+    
+    tbody.innerHTML = html;
 }
 
 function switchView(view) {
