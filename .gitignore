@@ -58,6 +58,10 @@ docs/build/
 # electron-app
 electron-app/
 
+# agent
+kimi.md
+agent/
+
 # design
 design/
 
