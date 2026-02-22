@@ -164,7 +164,7 @@
     </div>
 
     <!-- 可滚动内容区域 -->
-    <div class="scrollable-content" id="scrollableContent">
+    <div class="scrollable-content overflow-x-visible" id="scrollableContent">
         <!-- 项目列表 - 卡片视图 -->
         <div id="cardView" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <!-- 动态加载 -->
@@ -193,8 +193,32 @@
                 #listView .overflow-y-scroll::-webkit-scrollbar {
                     display: none;
                 }
+                /* 隐藏列表视图表头的滚动条 */
+                #listView .overflow-y-scroll::-webkit-scrollbar {
+                    display: none;
+                }
+                /* 下拉菜单样式优化 */
+                .dropdown-menu {
+                    position: absolute;
+                    display: none;
+                }
+                .dropdown-menu.show {
+                    display: block !important;
+                }
+                .dropdown-menu.dropdown-up {
+                    top: auto !important;
+                    bottom: 100% !important;
+                    margin-top: 0 !important;
+                    margin-bottom: 8px !important;
+                }
+                .dropdown-menu.dropdown-down {
+                    top: 100% !important;
+                    bottom: auto !important;
+                    margin-top: 8px !important;
+                    margin-bottom: 0 !important;
+                }
             </style>
-            <div id="listViewBody" class="divide-y divide-gray-200 overflow-y-auto flex-1">
+            <div id="listViewBody" class="divide-y divide-gray-200 overflow-y-auto flex-1 min-h-0 overflow-x-visible">
                 <!-- 动态加载 -->
             </div>
         </div>
@@ -500,5 +524,5 @@
 
 <!-- 页面脚本 -->
 <script src="/static/js/components/dropdown.js?v=202602131751"></script>
-<script src="/static/js/pages/index.js?v=202602131803"></script>
+<script src="/static/js/pages/index.js?v=202602131825"></script>
 {% endblock %}

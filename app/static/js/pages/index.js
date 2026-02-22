@@ -506,7 +506,7 @@ function renderCardView(projects) {
                             <button onclick="toggleDropdown(event, '${project.object_id}')" class="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"></path></svg>
                             </button>
-                            <div id="dropdown-${project.object_id}" class="dropdown-menu absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                            <div id="dropdown-${project.object_id}" class="dropdown-menu absolute right-0 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50" style="top: 100%; margin-top: 4px;">
                                 ${renderProjectActionMenu(project, projectUrl, canManage, isAdmin)}
                             </div>
                         </div>
@@ -558,7 +558,7 @@ function renderListView(projects) {
                         <button onclick="toggleDropdown(event, 'list-${project.object_id}')" class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
                         </button>
-                        <div id="dropdown-list-${project.object_id}" class="dropdown-menu absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                        <div id="dropdown-list-${project.object_id}" class="dropdown-menu absolute right-0 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50" style="top: 100%; margin-top: 8px;">
                             ${renderProjectActionMenu(project, projectUrl, canManage, isAdmin)}
                         </div>
                     </div>
@@ -597,8 +597,15 @@ function switchView(view) {
 function toggleDropdown(event, projectId) {
     event.stopPropagation();
 
-    document.querySelectorAll('.custom-dropdown .dropdown-menu').forEach(menu => menu.classList.add('hidden'));
-    document.querySelectorAll('.custom-dropdown .dropdown-arrow').forEach(arrow => arrow.classList.remove('rotate-180'));
+    // 关闭所有其他下拉菜单
+    document.querySelectorAll('.dropdown-menu').forEach(menu => {
+        menu.classList.remove('show', 'dropdown-up', 'dropdown-down');
+        // 重置位置样式
+        menu.style.top = '';
+        menu.style.bottom = '';
+        menu.style.marginTop = '';
+        menu.style.marginBottom = '';
+    });
 
     if (activeDropdown && activeDropdown !== `dropdown-${projectId}`) {
         const prevDropdown = document.getElementById(activeDropdown);
@@ -606,9 +613,40 @@ function toggleDropdown(event, projectId) {
     }
 
     const dropdown = document.getElementById(`dropdown-${projectId}`);
-    if (dropdown) {
-        dropdown.classList.toggle('show');
-        activeDropdown = dropdown.classList.contains('show') ? `dropdown-${projectId}` : null;
+    if (!dropdown) return;
+
+    const isShowing = dropdown.classList.contains('show');
+    
+    if (isShowing) {
+        // 如果已经显示，则关闭
+        dropdown.classList.remove('show');
+        activeDropdown = null;
+    } else {
+        // 计算展开方向
+        const button = event.currentTarget;
+        const buttonRect = button.getBoundingClientRect();
+        const dropdownHeight = 200; // 下拉菜单大致高度
+        const viewportHeight = window.innerHeight;
+        const spaceBelow = viewportHeight - buttonRect.bottom;
+        const spaceAbove = buttonRect.top;
+        
+        // 如果下方空间不足且上方空间充足，则向上展开
+        if (spaceBelow < dropdownHeight && spaceAbove > dropdownHeight) {
+            dropdown.classList.add('dropdown-up');
+            dropdown.style.bottom = '100%';
+            dropdown.style.marginBottom = '8px';
+            dropdown.style.top = 'auto';
+            dropdown.style.marginTop = '0';
+        } else {
+            dropdown.classList.add('dropdown-down');
+            dropdown.style.top = '100%';
+            dropdown.style.marginTop = '8px';
+            dropdown.style.bottom = 'auto';
+            dropdown.style.marginBottom = '0';
+        }
+        
+        dropdown.classList.add('show');
+        activeDropdown = `dropdown-${projectId}`;
     }
 }
 
