@@ -16,11 +16,8 @@
     }
     
     /* 自定义下拉菜单样式 */
-    .custom-dropdown .dropdown-menu {
+    .custom-dropdown .dropdown-menu:not(.hidden) {
         animation: dropdownIn 0.15s ease;
-        opacity: 1 !important;
-        visibility: visible !important;
-        transform: none !important;
     }
     @keyframes dropdownIn {
         from { opacity: 0; transform: translateY(-8px); }

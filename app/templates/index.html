@@ -48,11 +48,8 @@
     }
     
     /* 自定义下拉菜单样式 */
-    .custom-dropdown .dropdown-menu {
+    .custom-dropdown .dropdown-menu:not(.hidden) {
         animation: dropdownIn 0.15s ease;
-        opacity: 1 !important;
-        visibility: visible !important;
-        transform: none !important;
     }
     @keyframes dropdownIn {
         from { opacity: 0; transform: translateY(-8px); }
@@ -202,7 +199,7 @@
                     position: absolute;
                     display: none;
                 }
-                .dropdown-menu.show {
+                .dropdown-menu:not(.hidden) {
                     display: block !important;
                 }
                 .dropdown-menu.dropdown-up {
@@ -524,5 +521,5 @@
 
 <!-- 页面脚本 -->
 <script src="/static/js/components/dropdown.js?v=202602131751"></script>
-<script src="/static/js/pages/index.js?v=202602131825"></script>
+<script src="/static/js/pages/index.js?v=202603011520"></script>
 {% endblock %}

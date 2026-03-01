@@ -101,10 +101,10 @@
             opacity: 0;
             visibility: hidden;
             transform: translateY(-10px);
-            transition: opacity 0.2s ease, transform 0.2s ease;
+            transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
             will-change: opacity, transform;
         }
-        .dropdown-menu.show {
+        .dropdown-menu:not(.hidden) {
             opacity: 1;
             visibility: visible;
             transform: translateY(0);
