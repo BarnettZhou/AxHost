@@ -19,6 +19,10 @@ os.makedirs(static_dir, exist_ok=True)
 
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+# 挂载上传文件目录
+uploads_dir = os.path.join(os.path.dirname(BASE_DIR), "uploads")
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 templates = Jinja2Templates(directory=templates_dir)
 
 # 导入路由
@@ -41,6 +45,10 @@ def login_page(request: Request):
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page(request: Request):
     return templates.TemplateResponse("admin.html", {"request": request})
+
+@app.get("/axhost-portal", response_class=HTMLResponse)
+def portal_page(request: Request):
+    return templates.TemplateResponse("axportal.html", {"request": request})
 
 if __name__ == "__main__":
     import uvicorn

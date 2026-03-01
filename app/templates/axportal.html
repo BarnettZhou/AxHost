@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block title %}AxHost Portal - 本地工具{% endblock %}
+
+{% block extra_css %}
+<style>
+    .portal-page {
+        height: 100%;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .portal-container {
+        flex: 1;
+        overflow-y: auto;
+        margin: -16px -24px;
+        padding: 16px 24px;
+    }
+    
+    .portal-content {
+        max-width: 896px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .portal-hero {
+        background: linear-gradient(135deg, #f9f9f9 0%, #fff5eb 100%);
+        border-radius: 16px;
+        padding: 48px 32px;
+        margin-bottom: 32px;
+        text-align: center;
+    }
+    
+    .portal-icon {
+        width: 80px;
+        height: 80px;
+        background: linear-gradient(135deg, #FF6600 0%, #FF8533 100%);
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 24px;
+        box-shadow: 0 8px 24px rgba(255, 102, 0, 0.25);
+    }
+    
+    .portal-icon svg {
+        width: 40px;
+        height: 40px;
+        color: white;
+    }
+    
+    .portal-title {
+        font-size: 32px;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 8px;
+    }
+    
+    .portal-subtitle {
+        font-size: 18px;
+        color: #6b7280;
+        font-weight: 500;
+    }
+    
+    .portal-section {
+        background: white;
+        border-radius: 12px;
+        padding: 32px;
+        margin-bottom: 24px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    
+    .section-title {
+        font-size: 20px;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .feature-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+        margin-top: 24px;
+    }
+    
+    .feature-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px;
+        background: #f9fafb;
+        border-radius: 10px;
+        border-left: 3px solid #FF6600;
+    }
+    
+    .feature-icon {
+        width: 40px;
+        height: 40px;
+        background: white;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    
+    .feature-icon svg {
+        width: 20px;
+        height: 20px;
+        color: #FF6600;
+    }
+    
+    .feature-content h4 {
+        font-size: 14px;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 4px;
+    }
+    
+    .feature-content p {
+        font-size: 13px;
+        color: #6b7280;
+        line-height: 1.5;
+    }
+    
+    .download-section {
+        text-align: center;
+    }
+    
+    .download-title {
+        font-size: 24px;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 24px;
+    }
+    
+    .download-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 24px;
+        flex-wrap: wrap;
+    }
+    
+    .download-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 32px;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 16px;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        min-width: 200px;
+        justify-content: center;
+    }
+    
+    .download-btn.windows {
+        background: linear-gradient(135deg, #FF6600 0%, #FF8533 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(255, 102, 0, 0.3);
+    }
+    
+    .download-btn.windows:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(255, 102, 0, 0.4);
+    }
+    
+    .download-btn.macos {
+        background: #f3f4f6;
+        color: #9ca3af;
+        cursor: not-allowed;
+        border: 2px dashed #e5e7eb;
+    }
+    
+    .download-btn svg {
+        width: 24px;
+        height: 24px;
+    }
+    
+    .version-info {
+        font-size: 12px;
+        color: #9ca3af;
+        margin-top: 8px;
+        font-weight: normal;
+    }
+    
+    .intro-text {
+        font-size: 15px;
+        line-height: 1.8;
+        color: #4b5563;
+    }
+    
+    .intro-text p {
+        margin-bottom: 12px;
+    }
+    
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="portal-page">
+    <div class="portal-container">
+        <div class="portal-content">
+        <!-- 顶部展示区 -->
+        <div class="portal-hero">
+            <div class="portal-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+            </div>
+            <h1 class="portal-title">AxHost Portal</h1>
+            <p class="portal-subtitle">原型托管快捷管理客户端</p>
+        </div>
+
+        <!-- 基本介绍 -->
+        <div class="portal-section">
+            <h2 class="section-title">
+                <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                工具介绍
+            </h2>
+            <div class="intro-text">
+                <p>AxHost Portal 是一款为 AxHost 原型托管系统设计的桌面端客户端工具，旨在提供更便捷的本地原型管理体验。通过该工具，您可以在桌面直接管理和同步原型项目，无需频繁打开浏览器。</p>
+            </div>
+            
+            <div class="feature-list">
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                    </div>
+                    <div class="feature-content">
+                        <h4>快速新建</h4>
+                        <p>选择你的本地原型HTML输出目录，即可快速新建项目，自动压缩处理</p>
+                    </div>
+                </div>
+                
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                    </div>
+                    <div class="feature-content">
+                        <h4>快速更新</h4>
+                        <p>将本地原型HTML输出目录与线上项目关联后，即可在每次生成HTML后快速上传</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <hr class="border-gray-200 my-8">
+
+        <!-- 下载地址 -->
+        <div class="portal-section download-section">
+            <h2 class="download-title">下载客户端</h2>
+            <p class="text-gray-500 mb-8">选择适合您的操作系统版本进行下载</p>
+            
+            <div class="download-buttons">
+                <a href="/uploads/portal/AxHost%20Portal-Setup-1.0.2.exe" class="download-btn windows" download>
+                    <svg fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/>
+                    </svg>
+                    <div>
+                        <div>Windows 版本</div>
+                        <div class="version-info">v1.0.2</div>
+                    </div>
+                </a>
+                
+                <button class="download-btn macos" disabled title="敬请期待">
+                    <svg fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                    </svg>
+                    <div>
+                        <div>macOS 版本</div>
+                        <div class="version-info">敬请期待</div>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 页面特定的 JavaScript (如果需要)
+</script>
+{% endblock %}
