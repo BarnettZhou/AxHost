@@ -76,7 +76,14 @@
                 });
                 
                 if (response.ok) {
-                    window.location.href = '/';
+                    // 检查是否有 next 参数，登录成功后跳转
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const next = urlParams.get('next');
+                    if (next && next.startsWith('/')) {
+                        window.location.href = next;
+                    } else {
+                        window.location.href = '/';
+                    }
                 } else {
                     const data = await response.json();
                     msg.textContent = data.detail || '登录失败';

@@ -26,9 +26,11 @@ app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 templates = Jinja2Templates(directory=templates_dir)
 
 # 导入路由
-from app.routers import auth, users, projects, tags
+from app.routers import auth, auth_cli, health, users, projects, tags
 
 app.include_router(auth.router)
+app.include_router(auth_cli.router)
+app.include_router(health.router)
 app.include_router(users.router)
 app.include_router(projects.router)
 app.include_router(tags.router)
