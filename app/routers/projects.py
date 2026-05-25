@@ -39,21 +39,34 @@ def is_admin(user: User):
     """检查用户是否为管理员"""
     return user.role == "admin"
 
-def decode_zip_filename(filename: str) -> str:
+def decode_zip_filename(info: zipfile.ZipInfo) -> str:
     """
     更稳健的 ZIP 文件名解码逻辑
+
+    Python 3.11+ 的 zipfile 会根据 flag_bits 判断编码：
+    - flag_bits & 0x800: UTF-8 编码，已正确解码
+    - 否则: 默认 cp437 编码（Windows 中文压缩包通常是 GBK/GB18030）
     """
+    filename = info.filename
+
+    # 如果设置了 UTF-8 flag，zipfile 已经用 UTF-8 正确解码，直接使用
+    if info.flag_bits & 0x800:
+        return filename
+
+    # zipfile 默认用 cp437 解码了文件名，尝试还原为原始字节再重新解码
     try:
-        # 1. 尝试将 zipfile 默认的 cp437 编码还原为原始字节，再用 gbk 解码
-        # 这是处理 Windows 中文压缩包最有效的方法
-        return filename.encode('cp437').decode('gbk')
-    except (UnicodeEncodeError, UnicodeDecodeError):
+        raw_bytes = filename.encode('cp437')
+    except UnicodeEncodeError:
+        return filename
+
+    # 依次尝试常见中文编码
+    for encoding in ('gbk', 'gb18030', 'utf-8'):
         try:
-            # 2. 如果失败，尝试 UTF-8 解码（处理本身就是 UTF-8 但被错误处理的情况）
-            return filename.encode('utf-8').decode('utf-8')
-        except:
-            # 3. 万不得已返回原样
-            return filename
+            return raw_bytes.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+
+    return filename
 
 
 def format_to_cst(dt):
@@ -229,7 +242,7 @@ def upload_project(
                 for info in zip_ref.infolist():
                     # 关键修改：直接对 info.filename 进行解码
                     # zipfile 的 info.filename 已经是被它用 cp437 解码后的字符串了
-                    decoded_name = decode_zip_filename(info.filename)
+                    decoded_name = decode_zip_filename(info)
                     
                     # 过滤 macOS 自动生成的缓存文件夹
                     if "__MACOSX" in decoded_name or ".DS_Store" in decoded_name:
@@ -444,7 +457,7 @@ def update_project_file(
             
             with zipfile.ZipFile(file_path, 'r') as zip_ref:
                 for info in zip_ref.infolist():
-                    decoded_name = decode_zip_filename(info.filename)
+                    decoded_name = decode_zip_filename(info)
                     
                     if "__MACOSX" in decoded_name or ".DS_Store" in decoded_name:
                         continue

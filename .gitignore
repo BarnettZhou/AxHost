@@ -75,3 +75,6 @@ docs/
 # Temporary files
 *.tmp
 *.temp
+
+# Large binary downloads
+app/static/downloads/*.exe

@@ -20,9 +20,6 @@ os.makedirs(static_dir, exist_ok=True)
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# 挂载上传文件目录
-uploads_dir = os.path.join(os.path.dirname(BASE_DIR), "uploads")
-app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 templates = Jinja2Templates(directory=templates_dir)
 
 # 导入路由
